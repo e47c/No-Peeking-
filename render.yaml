@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: no-peeking
+    runtime: node
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_VERSION
+        value: 20
+      - key: VITE_CLIENT_ID
+        sync: false
+      - key: CLIENT_SECRET
+        sync: false
+      - key: PUBLIC_URL
+        sync: false

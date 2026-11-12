@@ -158,6 +158,7 @@ function resolveGuess(room) {
     p.status = "solved";
     p.score += points;
     p.lastPoints = points;
+    p.hist[room.round] = points;
     room.log = `✅ ${p.name} guessed right! +${points} points`;
     emit(room, "correct", p.id, { points });
   } else {
@@ -210,6 +211,7 @@ function stateFor(room, userId) {
       status: p.status,
       wrong: p.wrong,
       lastPoints: p.lastPoints,
+      hist: p.hist,
     })),
     guess: room.guess
       ? (() => {
@@ -295,6 +297,8 @@ wss.on("connection", (ws) => {
           cards: Array(CARDS_PER_PLAYER).fill(null),
           seen: new Set(),
           score: 0,
+          hist: Array(CARDS_PER_PLAYER).fill(0),
+          lastReact: 0,
           status: "playing", // playing | solved | out
           wrong: 0,
           lastPoints: 0,
@@ -365,6 +369,17 @@ wss.on("connection", (ws) => {
       resolveGuess(room); // (ends at once if nobody can vote)
       return broadcast(room);
     }
+    if (msg.type === "react") {
+      if (room.phase !== "ROUND" || room.guess) return;
+      const cur = askerId(room);
+      if (!cur || cur === userId) return; // only the OTHER players answer
+      if (!["yes", "no", "maybe"].includes(msg.value)) return;
+      const t = Date.now();
+      if (t - player.lastReact < 450) return; // no spamming
+      player.lastReact = t;
+      emit(room, "react", userId, { value: msg.value, to: cur });
+      return broadcast(room);
+    }
     if (msg.type === "pass") {
       if (room.phase !== "ROUND" || room.guess) return;
       if (userId !== askerId(room) && userId !== room.hostId) return; // host can skip a sleeping player
@@ -388,7 +403,7 @@ wss.on("connection", (ws) => {
       if (userId !== room.hostId) return;
       for (const p of room.players.values()) {
         p.cards = Array(CARDS_PER_PLAYER).fill(null);
-        p.score = 0; p.status = "playing"; p.wrong = 0; p.lastPoints = 0;
+        p.score = 0; p.hist = Array(CARDS_PER_PLAYER).fill(0); p.status = "playing"; p.wrong = 0; p.lastPoints = 0;
       }
       room.guess = null;
       room.turn = null;

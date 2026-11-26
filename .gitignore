@@ -3,3 +3,5 @@ dist/
 .env
 config.local.json
 *.log
+
+screenshots/

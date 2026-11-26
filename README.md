@@ -88,3 +88,15 @@ The browser tests need Chromium once: `npx playwright install chromium`.
 `test:browser` plays two complete games with three browser pages. It reads the pixels of
 every card to prove each one shows the picture its owner uploaded, and it reads the
 WebSocket traffic to prove the card you are holding is never sent to your browser at all.
+
+## Looking at the design without Discord
+
+```bash
+npm run build
+npm run screenshots
+```
+
+Plays a whole game and writes a screenshot of every screen — menu, how-to-play, settings,
+lobby, dealing, your turn, someone else's turn, guessing, voting, round complete, and the
+three stages of the winner ceremony — at a desktop size and a phone size, into
+`screenshots/`. Useful for checking a design change before taking it into a voice call.

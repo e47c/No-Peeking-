@@ -80,6 +80,30 @@ was never tested in a browser. The server now accepts both forms, which changes 
 inside Discord (the proxy strips the prefix before the request arrives) and makes local
 development and automated testing possible.
 
+### Design pass
+
+Every screen was walked through and looked at, at a desktop size and a phone size —
+menu, how to play, settings, lobby, uploading, dealing, your turn, someone else's turn,
+guessing, voting, round complete, and all three stages of the winner ceremony. There is
+now a `npm run screenshots` tool that produces exactly that set, so the next design change
+can be checked the same way without going into a voice call.
+
+What changed as a result:
+
+- **The celebration buried the winner on a phone.** Confetti was tuned for a desktop
+  window, so the same 300 pieces on a 390px screen covered the champion's name and score
+  completely. The amount now scales with the size of the screen.
+- **"Play again" was below the fold.** On a short window the winner stage took so much
+  room that the podium, the standings and the only button on the screen were all out of
+  sight, with nothing to suggest they were there. The celebration is scaled down when the
+  window is short, and once the ceremony finishes the buttons are brought into view.
+- **The lobby was a very long scroll on a phone.** The three upload cards were each a
+  full-width square, so the list of players was pushed far off the top and you could not
+  see your own progress. Two cards per row on small screens.
+- **Standings rows wrapped differently from each other**, so the rank, the badges, the
+  per-round chips and the total landed in a different place on every line. The rank is
+  pinned left and the total pinned right now, with only the middle wrapping.
+
 ### Added
 
 - **A real test suite, run with `npm test`.** 30 tests against a real server over real
@@ -98,8 +122,9 @@ development and automated testing possible.
 - **Gameplay, scoring and round structure** are untouched.
 - **`docs/terms.html` and `docs/privacy.html`** are untouched.
 - **The visual identity** — polaroids, censor bar, stamps, the dark stage — is kept. The
-  design system underneath turned out to be coherent; what made it look amateur was bug (1),
-  not the styling.
+  design system underneath turned out to be coherent: one spacing scale, one radius scale,
+  focus rings, safe-area insets. What made it look unfinished was bug (1), not the
+  styling, so the design pass above fixes layout and density rather than restyling.
 - **One rule worth a decision from you, left alone.** A guess is judged by a strict
   majority of yes votes. In a three-player game that means one "no" ends the guess
   immediately, while a "yes" needs both other players. The early exit is arithmetically

@@ -12,7 +12,8 @@
     "test": "npm run test:server && npm run test:browser",
     "test:server": "node --test test/game.test.mjs test/deal.test.mjs test/edge.test.mjs",
     "test:browser": "node --test --test-timeout=900000 test/browser.test.mjs",
-    "tunnel": "cloudflared tunnel --url http://localhost:5173"
+    "tunnel": "cloudflared tunnel --url http://localhost:5173",
+    "screenshots": "node test/screenshots.mjs"
   },
   "dependencies": {
     "@discord/embedded-app-sdk": "2.5.0",

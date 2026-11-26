@@ -490,6 +490,14 @@ function countUp(el, to, fmt) {
   A.resIntervals.push(iv);
 }
 
+// The celebration is taller than a short window, so once it is over make sure the
+// buttons underneath are actually on screen rather than below the fold.
+function revealResultActions() {
+  const el = $("resultActions");
+  if (!el) return;
+  try { el.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "nearest" }); } catch { el.scrollIntoView(); }
+}
+
 function showResultsFinal() { // everything visible at once (used for "Skip", reconnects and reduced motion)
   clearResTimers();
   $("suspense").classList.add("hidden");
@@ -499,6 +507,7 @@ function showResultsFinal() { // everything visible at once (used for "Skip", re
   ["boardTitle", "standings", "resultActions"].forEach((id) => $(id).classList.remove("pre"));
   $("skipBtn").classList.add("hidden");
   if (card.dataset.has === "1") $("winScore").textContent = `⭐ ${card.dataset.top}`;
+  revealResultActions();
 }
 
 function renderResultActions(s) {
@@ -597,6 +606,7 @@ function renderResults(s, fresh) {
   later(3300 + order.length * 560 + 400, () => {
     ["boardTitle", "standings", "resultActions"].forEach((id) => $(id).classList.remove("pre"));
     $("skipBtn").classList.add("hidden");
+    revealResultActions();
   });
 }
 

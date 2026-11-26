@@ -41,7 +41,14 @@ export function flash(kind) {
 let raf = 0;
 let parts = [];
 let running = false;
+// A full desktop window. Smaller screens get proportionally fewer pieces, so the
+// celebration never buries the winner's name.
+const REFERENCE_AREA = 1280 * 800;
+const densityScale = () =>
+  Math.max(0.18, Math.min(1, (window.innerWidth * window.innerHeight) / REFERENCE_AREA));
+
 export function confetti(ms = 2500, count = 140) {
+  count = Math.max(10, Math.round(count * densityScale()));
   if (reduce()) count = Math.min(count, 24);
   const cv = document.getElementById("confetti");
   const c = cv.getContext("2d");
@@ -67,7 +74,7 @@ export function confetti(ms = 2500, count = 140) {
   running = true;
   const step = (t) => {
     c.clearRect(0, 0, cv.width, cv.height);
-    if (t - start < ms * 0.6) spawn(reduce() ? 0 : 3);
+    if (t - start < ms * 0.6) spawn(reduce() ? 0 : Math.max(1, Math.round(3 * densityScale())));
     for (const p of parts) {
       p.x += p.vx; p.y += p.vy; p.vy += 0.06; p.r += p.vr;
       c.save(); c.translate(p.x, p.y); c.rotate(p.r);

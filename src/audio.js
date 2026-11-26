@@ -178,6 +178,9 @@ export const sfx = {
   }),
   out: play(() => { const t = now(); osc("sine", 95, t, 0.7, 0.4, { to: 35 }); [7, 4, 0, -5].forEach((s, i) => marimba(nt(s), t + 0.15 + i * 0.16, 0.16, 0.6)); }),
   reveal: play(() => { const t = now(); nz(t, 0.4, 0.22, { f: 900, to: 6500, q: 0.9, a: 0.1 }); bell(nt(24), t + 0.3, 0.1, 1.2); }),
+  drumroll: play(() => { const t = now(); roll(t, 1.7, 0.2); osc("sawtooth", 65, t, 1.8, 0.09, { lp: 260, a: 1.2 }); nz(t + 1.4, 0.45, 0.1, { f: 300, to: 6000, q: 0.7, a: 0.3 }); }),
+  tick: play(() => osc("triangle", 1400, now(), 0.04, 0.1)),
+  thud: play((rank = 1) => { const t = now(); stamp(t, 0.35); bell(nt(12 + ([0, 7, 12][rank - 1] || 0)), t + 0.05, 0.08, 1); }),
   roundEnd: play(() => { const t = now(); [0, 4, 7, 12].forEach((s) => marimba(nt(s), t, 0.14, 0.9)); bell(nt(19), t + 0.05, 0.1, 1.5); }),
   win: play(() => {
     const t = now();

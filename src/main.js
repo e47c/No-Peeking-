@@ -30,6 +30,7 @@ const A = {
   imgCache: new Map(), roster: new Map(), tiles: new Map(),
   slots: [], pending: [], pendingName: [], sending: new Set(), slotsBuilt: false,
   dockSig: "", guessKey: "", guessActSig: "", resultsKey: "", armTimer: 0,
+  epoch: null, confirmed: [], autoTried: [], resTimers: [], resIntervals: [],
 };
 
 // ---------- helpers ----------
@@ -118,6 +119,7 @@ function resizeImage(file) {
       const img = new Image();
       img.onerror = fail;
       img.onload = () => {
+        if (!img.width || !img.height) return fail();
         const scale = Math.min(1, 640 / Math.max(img.width, img.height));
         const c = document.createElement("canvas");
         c.width = Math.max(1, Math.round(img.width * scale)); c.height = Math.max(1, Math.round(img.height * scale));
@@ -134,6 +136,28 @@ function resizeImage(file) {
 function setMsg(i, text, kind = "") { const m = A.slots[i].msg; m.textContent = text; m.className = "msg " + kind; }
 function busy(i, on) { A.slots[i].busy.classList.toggle("hidden", !on); }
 function saveLabel(i) { const f = A.slots[i]; f.save.textContent = f.card.classList.contains("locked") ? "Update" : "Lock it in"; }
+
+function sendUpload(i, n) {
+  const f = A.slots[i];
+  A.sending.add(i); A.pendingName[i] = n; f.save.disabled = true; f.save.textContent = "Sending…"; setMsg(i, "");
+  send({ type: "upload", slot: i, name: n, image: A.pending[i] });
+  clearTimeout(f.timer);
+  f.timer = setTimeout(() => {
+    if (!A.sending.has(i)) return;
+    A.sending.delete(i); f.save.disabled = false; saveLabel(i); setMsg(i, "No answer from the server. Try again.", "bad"); sfx.deny();
+  }, 8000);
+}
+
+// the server confirmed the upload
+function onUploaded(i) {
+  const f = A.slots[i];
+  if (!f || !A.sending.has(i)) return;
+  A.sending.delete(i); clearTimeout(f.timer);
+  A.confirmed[i] = A.pendingName[i]; A.autoTried[i] = false;
+  f.save.disabled = false;
+  f.card.classList.remove("thud"); void f.card.offsetWidth; f.card.classList.add("thud");
+  setMsg(i, "Locked in ✓", "ok"); sfx.save(); announce(`Card ${i + 1} locked in`);
+}
 
 function buildSlots(count) {
   if (A.slotsBuilt) return;
@@ -162,7 +186,7 @@ function buildSlots(count) {
     const handle = async (f) => {
       setMsg(i, "");
       if (!f) return;
-      if (!f.type.startsWith("image/")) return setMsg(i, "That is not a picture.", "bad");
+      if (f.type && !f.type.startsWith("image/")) return setMsg(i, "That is not a picture.", "bad");
       busy(i, true);
       try {
         A.pending[i] = await resizeImage(f);
@@ -170,7 +194,7 @@ function buildSlots(count) {
       } catch (e) { setMsg(i, e.message, "bad"); sfx.deny(); }
       busy(i, false);
     };
-    file.onchange = () => handle(file.files[0]);
+    file.onchange = () => { const picked = file.files && file.files[0]; file.value = ""; handle(picked); };
     drop.addEventListener("dragover", (e) => { e.preventDefault(); drop.classList.add("over"); });
     drop.addEventListener("dragleave", () => drop.classList.remove("over"));
     drop.addEventListener("drop", (e) => { e.preventDefault(); drop.classList.remove("over"); handle(e.dataTransfer.files[0]); });
@@ -182,13 +206,7 @@ function buildSlots(count) {
       if (!A.pending[i]) { sfx.deny(); return setMsg(i, "Choose the picture again to update this card.", "bad"); }
       if (!n) { sfx.deny(); name.focus(); return setMsg(i, "Write who it is.", "bad"); }
       if (!A.ws || A.ws.readyState !== 1) { sfx.deny(); return setMsg(i, "Not connected right now.", "bad"); }
-      A.sending.add(i); A.pendingName[i] = n; save.disabled = true; save.textContent = "Sending…"; setMsg(i, "");
-      send({ type: "upload", slot: i, name: n, image: A.pending[i] });
-      clearTimeout(A.slots[i].timer);
-      A.slots[i].timer = setTimeout(() => {
-        if (!A.sending.has(i)) return;
-        A.sending.delete(i); save.disabled = false; saveLabel(i); setMsg(i, "No answer from the server. Try again.", "bad"); sfx.deny();
-      }, 8000);
+      sendUpload(i, n);
     };
   }
 }
@@ -199,10 +217,9 @@ function updateSlots(s) {
     f.card.classList.toggle("locked", sl.saved);
     if (sl.saved && !f.name.value) f.name.value = sl.name;
     if (!f.card.classList.contains("has-pic") && sl.saved) { f.ph.querySelector("span").textContent = "Picture locked in"; f.ph.querySelector("small").textContent = ""; }
-    if (A.sending.has(i) && sl.saved && sl.name === A.pendingName[i]) {
-      A.sending.delete(i); clearTimeout(f.timer); f.save.disabled = false;
-      f.card.classList.remove("thud"); void f.card.offsetWidth; f.card.classList.add("thud");
-      setMsg(i, "Locked in ✓", "ok"); sfx.save(); announce(`Card ${i + 1} locked in`);
+    // The server forgets your cards if you were disconnected in the lobby. We still have the picture: send it again.
+    if (!sl.saved && A.confirmed[i] && A.pending[i] && !A.sending.has(i) && !A.autoTried[i]) {
+      A.autoTried[i] = true; sendUpload(i, A.confirmed[i]); return;
     }
     if (!A.sending.has(i)) { f.save.disabled = false; saveLabel(i); }
   });
@@ -212,7 +229,7 @@ function resetSlots() {
   A.sending.clear();
   A.slots.forEach((f, i) => {
     clearTimeout(f.timer);
-    A.pending[i] = null; A.pendingName[i] = "";
+    A.pending[i] = null; A.pendingName[i] = ""; A.confirmed[i] = null; A.autoTried[i] = false;
     f.file.value = ""; f.img.removeAttribute("src"); f.img.classList.add("hidden");
     f.ph.classList.remove("hidden"); f.ph.querySelector("span").textContent = "Add a picture"; f.ph.querySelector("small").textContent = "tap or drop one here";
     f.card.classList.remove("has-pic", "locked", "thud"); f.name.value = ""; f.save.disabled = false; f.save.textContent = "Lock it in"; setMsg(i, "");
@@ -321,7 +338,7 @@ function updateTile(t, p, s, idx) {
   r.classList.toggle("offline", !p.online);
   t.stamp.textContent = p.status === "solved" ? `Got it +${p.lastPoints}` : p.status === "out" ? "Out" : "";
 
-  if (t.c.src !== src) { t.c.src = src; if (src) t.img.src = src; }
+  if (t.c.src !== src) { t.c.src = src; if (src) t.img.src = src; else t.img.removeAttribute("src"); }
   t.img.classList.toggle("hidden", !src);
   t.zoom.hidden = !src;
   t.wait.classList.toggle("hidden", !(!src && !mine));
@@ -448,34 +465,132 @@ function renderGuess(s) {
   }
 }
 
-// ---------- results ----------
-function renderResults(s) {
+// ---------- results: the winner ceremony ----------
+function clearResTimers() {
+  A.resTimers.forEach(clearTimeout); A.resTimers = [];
+  A.resIntervals.forEach(clearInterval); A.resIntervals = [];
+}
+const later = (ms, fn) => { A.resTimers.push(setTimeout(fn, ms)); };
+
+function countUp(el, to, fmt) {
+  if (to <= 0 || reduceMotion) { el.textContent = fmt(to); return; }
+  let n = 0; el.textContent = fmt(0);
+  const step = Math.max(1, Math.ceil(to / 12));
+  const iv = setInterval(() => {
+    n = Math.min(to, n + step); el.textContent = fmt(n); sfx.tick();
+    if (n >= to) clearInterval(iv);
+  }, 85);
+  A.resIntervals.push(iv);
+}
+
+function showResultsFinal() { // everything visible at once (used for "Skip", reconnects and reduced motion)
+  clearResTimers();
+  $("suspense").classList.add("hidden");
+  const card = $("winnerCard");
+  if (card.dataset.has === "1") { card.classList.remove("hidden"); card.classList.add("in"); $("winStage").classList.add("revealed"); }
+  document.querySelectorAll("#podium .pod").forEach((p) => p.classList.remove("pre"));
+  ["boardTitle", "standings", "resultActions"].forEach((id) => $(id).classList.remove("pre"));
+  $("skipBtn").classList.add("hidden");
+  if (card.dataset.has === "1") $("winScore").textContent = `⭐ ${card.dataset.top}`;
+}
+
+function renderResultActions(s) {
+  const sig = s.hostId + "|" + (s.hostId === A.myId);
+  if (A.resultsHost === sig) return;
+  A.resultsHost = sig;
+  const ra = $("resultActions"); ra.replaceChildren();
+  if (s.hostId === A.myId) {
+    const b = el("button", "btn primary huge", "Play again"); b.type = "button"; b.onclick = () => send({ type: "reset" }); ra.appendChild(b);
+    ra.appendChild(el("p", "menu-note", "Back to the lobby. Everyone uploads 3 new cards."));
+  } else ra.appendChild(el("p", "menu-note", "Waiting for the host to start another game…"));
+}
+
+function renderResults(s, fresh) {
   const sorted = [...s.players].sort((a, b) => b.score - a.score);
-  const key = JSON.stringify(sorted.map((p) => [p.id, p.score])) + s.hostId;
-  if (key === A.resultsKey) return;
+  const key = JSON.stringify(sorted.map((p) => [p.id, p.score, p.hist]));
+  if (key === A.resultsKey) { renderResultActions(s); return; }
   A.resultsKey = key;
-  const top = sorted[0] ? sorted[0].score : 0;
+  clearResTimers();
+
+  const n = s.players.length, top = sorted[0] ? sorted[0].score : 0;
   const winners = top > 0 ? sorted.filter((p) => p.score === top) : [];
-  $("winnerLine").textContent = winners.length ? `${winners.map((p) => p.name).join(" & ")} ${winners.length > 1 ? "take" : "takes"} the spotlight!` : "Nobody scored. Rematch?";
+  const rankOf = (p) => sorted.findIndex((q) => q.score === p.score) + 1; // ties share a rank
+  const tags = (p) => {
+    const t = [];
+    if (p.hist.length && p.hist.every((h) => h > 0)) t.push("Perfect game");
+    const first = p.hist.filter((h) => h === n && n > 1).length;
+    if (first) t.push(`⚡ First to guess ×${first}`);
+    return t;
+  };
+  const chips = (p, cls) => { const box = el("div", cls); p.hist.forEach((h, r) => box.appendChild(el("b", h ? "got" : "", `R${r + 1} ${h ? "+" + h : "–"}`))); return box; };
+
+  // winner card
+  const card = $("winnerCard");
+  card.classList.remove("in");
+  card.dataset.has = winners.length ? "1" : "0"; card.dataset.top = String(top);
+  $("winAvatars").replaceChildren(...winners.map((p) => avatarEl(p, "xl")));
+  $("winAvatars").classList.toggle("many", winners.length > 1);
+  $("winKicker").textContent = winners.length > 1 ? "Co-champions" : "Champion";
+  $("winName").textContent = winners.map((p) => p.name).join(" & ");
+  $("winScore").textContent = `⭐ ${top}`;
+  const wc = $("winChips"); wc.replaceChildren();
+  if (winners.length === 1) { wc.appendChild(chips(winners[0], "chips")); tags(winners[0]).forEach((t) => wc.appendChild(el("span", "tag", t))); }
+
+  // podium (top 3)
   const pod = $("podium"); pod.replaceChildren();
   [1, 0, 2].filter((i) => sorted[i]).forEach((i) => {
     const p = sorted[i];
-    const d = el("div", `pod p${i + 1}`); d.style.setProperty("--accent", accent(s, p.id));
+    const d = el("div", `pod p${i + 1} pre`); d.dataset.rank = String(i + 1); d.style.setProperty("--accent", accent(s, p.id));
     if (winners.includes(p)) d.appendChild(icon("i-crown", "crown"));
-    const step = el("div", "step"); step.append(el("div", "rank", String(i + 1)), el("div", "pts", `⭐ ${p.score}`));
-    d.append(avatarEl(p, "lg"), el("div", "pname", p.name), el("div", "hist", p.hist.map((h, r) => `R${r + 1}: ${h ? "+" + h : "–"}`).join("  ")), step);
+    const step = el("div", "step"); step.append(el("div", "rank", String(rankOf(p))), el("div", "pts", `⭐ ${p.score}`));
+    d.append(avatarEl(p, "lg"), el("div", "pname", p.name), step);
     pod.appendChild(d);
   });
+
+  // full standings
   const ol = $("standings"); ol.replaceChildren();
-  sorted.slice(3).forEach((p, i) => {
+  sorted.forEach((p) => {
     const li = el("li"); li.style.setProperty("--accent", accent(s, p.id));
-    const chips = el("div", "chips"); p.hist.forEach((h, r) => chips.appendChild(el("b", "", `R${r + 1} ${h ? "+" + h : "–"}`)));
-    li.append(el("span", "pos", String(i + 4)), el("span", "nm", p.name), chips, el("span", "tot", `⭐ ${p.score}`));
+    const who = el("div", "nm"); who.append(el("span", "", p.id === A.myId ? `${p.name} (you)` : p.name));
+    tags(p).forEach((t) => who.appendChild(el("span", "tag", t)));
+    li.append(el("span", "pos", String(rankOf(p))), who, chips(p, "chips"), el("span", "tot", `⭐ ${p.score}`));
     ol.appendChild(li);
   });
-  const ra = $("resultActions"); ra.replaceChildren();
-  if (s.hostId === A.myId) { const b = el("button", "btn primary huge", "Play again"); b.type = "button"; b.onclick = () => send({ type: "reset" }); ra.appendChild(b); ra.appendChild(el("p", "menu-note", "Back to the lobby. Everyone uploads 3 new cards.")); }
-  else ra.appendChild(el("p", "menu-note", "Waiting for the host to start another game…"));
+
+  A.resultsHost = ""; renderResultActions(s);
+
+  // ---- the show ----
+  const stage = $("winStage");
+  stage.classList.remove("revealed");
+  const pods = [...document.querySelectorAll("#podium .pod")];
+  if (!winners.length) { // nobody scored
+    $("suspense").textContent = "Nobody scored. Rematch?"; $("suspense").classList.remove("hidden"); card.classList.add("hidden");
+    showResultsFinal(); $("suspense").classList.remove("hidden"); if (fresh) sfx.roundEnd(); return;
+  }
+  $("suspense").textContent = "And the winner is…";
+  if (!fresh || reduceMotion) { showResultsFinal(); if (fresh) { sfx.win(); confetti(2500, 60); } return; }
+
+  const winText = `${winners.map((p) => p.name).join(" and ")} ${winners.length > 1 ? "win" : "wins"} with ${top} ${top === 1 ? "point" : "points"}`;
+  card.classList.add("hidden"); $("suspense").classList.remove("hidden");
+  pods.forEach((p) => p.classList.add("pre"));
+  ["boardTitle", "standings", "resultActions"].forEach((id) => $(id).classList.add("pre"));
+  $("skipBtn").classList.remove("hidden");
+  sfx.drumroll();
+  later(1900, () => {
+    $("suspense").classList.add("hidden");
+    card.classList.remove("hidden"); card.classList.remove("in"); void card.offsetWidth; card.classList.add("in");
+    stage.classList.add("revealed");
+    sfx.win(); flash("good"); confetti(6500, 300);
+    countUp($("winScore"), top, (v) => `⭐ ${v}`);
+    announce(winText);
+  });
+  later(2800, () => confetti(3500, 140));
+  const order = [...pods].sort((a, b) => Number(b.dataset.rank) - Number(a.dataset.rank)); // 3rd, 2nd, 1st
+  order.forEach((p, i) => later(3300 + i * 560, () => { p.classList.remove("pre"); sfx.thud(Number(p.dataset.rank)); }));
+  later(3300 + order.length * 560 + 400, () => {
+    ["boardTitle", "standings", "resultActions"].forEach((id) => $(id).classList.remove("pre"));
+    $("skipBtn").classList.add("hidden");
+  });
 }
 
 // ---------- sounds and animations from game events ----------
@@ -503,8 +618,6 @@ function playEvent(e, s) {
   } else if (e.type === "out") {
     setTimeout(() => sfx.out(), 500); announce(`${name} is out for this round`);
   } else if (e.type === "gameEnd") {
-    sfx.win(); confetti(6000, 260);
-    setTimeout(() => callout(`${(e.winnerIds || []).map((id) => nameOf(s, id)).join(" & ")} wins!`, "", "good"), 400);
     announce("Game over");
   }
 }
@@ -528,8 +641,9 @@ function handleEffects(s) {
 // ---------- state from the server ----------
 function onState(s) {
   A.joined = true; A.retry = 0; A.fatal = false;
-  $("net").classList.add("hidden");
+  $("net").classList.add("hidden"); $("net").classList.remove("static");
   A.cur = s;
+  if (A.epoch !== s.epoch) { A.epoch = s.epoch; A.lastEv = null; A.imgCache.clear(); } // a new room (or a restarted server)
   for (const t of s.table) if (t.image) A.imgCache.set(t.key, t.image);
   const keys = new Set(s.table.map((t) => t.key));
   for (const k of [...A.imgCache.keys()]) if (!keys.has(k)) A.imgCache.delete(k);
@@ -538,8 +652,9 @@ function onState(s) {
   showScreen(screen);
   if (screen === "lobby") { if (A.prev && A.prev.phase !== "LOBBY") resetSlots(); renderLobby(s); }
   if (screen === "game") renderGame(s);
-  if (screen === "results") renderResults(s);
-  if (screen !== "results") A.resultsKey = "";
+  if (screen === "results") renderResults(s, !!A.prev && A.prev.phase !== "GAME_END");
+  if (screen !== "results") { A.resultsKey = ""; A.resultsHost = ""; clearResTimers(); }
+  if (screen !== "game") A.dockSig = "";
   renderGuess(s);
   handleEffects(s);
   A.prev = s;
@@ -556,10 +671,19 @@ function connect() {
   ws.onmessage = (e) => {
     let msg; try { msg = JSON.parse(e.data); } catch { return; }
     if (msg.type === "state") onState(msg);
+    else if (msg.type === "uploaded") onUploaded(msg.slot);
     else if (msg.type === "error") onServerError(msg.message);
+    else if (msg.type === "replaced") onReplaced();
   };
   ws.onclose = () => { if (A.ws !== ws) return; if (A.fatal) return; scheduleRetry(); };
   ws.onerror = () => {};
+}
+
+function onReplaced() { // this account was opened in another window
+  A.fatal = true; clearTimeout(A.retryTimer);
+  const net = $("net"); net.classList.remove("hidden"); net.classList.add("static");
+  $("netMsg").textContent = "This game is open in another window.";
+  $("netBtn").textContent = "Use this window"; $("netBtn").classList.remove("hidden");
 }
 
 function onServerError(message) {
@@ -616,8 +740,9 @@ function bindUI() {
   $("setBtn").onclick = $("hudSet").onclick = () => openDlg("dlgSettings");
   $("playBtn").onclick = joinLobby;
   $("startBtn").onclick = () => send({ type: "start" });
-  $("netBtn").onclick = () => { A.retry = 0; connect(); };
+  $("netBtn").onclick = () => { A.retry = 0; A.fatal = false; $("net").classList.remove("static"); $("netBtn").textContent = "Retry now"; connect(); };
   $("retryBtn").onclick = () => location.reload();
+  $("skipBtn").onclick = () => showResultsFinal();
 
   const st = audio.state;
   $("volRange").value = Math.round(st.vol * 100); $("musicChk").checked = st.music;

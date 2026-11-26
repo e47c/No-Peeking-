@@ -6,7 +6,8 @@ import { WebSocketServer } from "ws";
 import { CLIENT_ID, CLIENT_SECRET } from "../config.js";
 
 // ====== Settings you can change ======
-const MIN_PLAYERS = 2;            // put 1 if you want to test alone
+const MIN_PLAYERS = 2;            // keep this at 2 or more (with 1 player there is nobody else's card to deal)
+const MAX_PLAYERS = 12;           // one game room holds at most this many players
 const CARDS_PER_PLAYER = 3;       // one image per round
 const ROOM_LIFETIME_MS = 2 * 60 * 60 * 1000; // wipe a room after 2 hours
 // =====================================
@@ -91,7 +92,7 @@ function dealRound(room) {
   room.guess = null;
   room.solved = 0;
   room.log = "";
-  for (const p of room.players.values()) { p.status = "playing"; p.wrong = 0; p.lastPoints = 0; }
+  for (const p of room.players.values()) { p.status = "playing"; p.wrong = 0; p.lastPoints = 0; p.seen = new Set(); }
   order.forEach((holderId, i) => room.deal.set(holderId, order[(i + 1) % order.length]));
   // who asks first? a fresh random turn order every round
   room.turn = { order: shuffle([...room.players.keys()]), idx: 0 };
@@ -180,7 +181,7 @@ function tableFor(room, userId) {
     // NEVER send the player's own card while they are still guessing
     if (holderId === userId && me && me.status === "playing") continue;
     const card = room.players.get(ownerId)?.cards[room.round];
-    if (card) out.push({ holderId, name: card.name, key: `${room.round}:${ownerId}`, image: card.image });
+    if (card) out.push({ holderId, name: card.name, key: card.id, image: card.image });
   }
   return out;
 }
@@ -189,6 +190,7 @@ function stateFor(room, userId) {
   const me = room.players.get(userId);
   return {
     type: "state",
+    epoch: room.epoch,
     phase: room.phase,
     round: room.round + 1,
     totalRounds: CARDS_PER_PLAYER,
@@ -248,10 +250,16 @@ function broadcast(room) {
 }
 
 async function verifyToken(token) {
-  const r = await fetch("https://discord.com/api/users/@me", {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  return r.ok ? r.json() : null;
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), 8000);
+  try {
+    const r = await fetch("https://discord.com/api/users/@me", { headers: { Authorization: `Bearer ${token}` }, signal: ctl.signal });
+    return r.ok ? await r.json() : null;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 function allReady(room) {
@@ -264,7 +272,7 @@ function allReady(room) {
 wss.on("connection", (ws) => {
   ws.ctx = null;
 
-  ws.on("message", async (raw) => {
+  const handle = async (raw) => {
     let msg;
     try { msg = JSON.parse(raw); } catch { return; }
 
@@ -272,22 +280,25 @@ wss.on("connection", (ws) => {
     if (msg.type === "hello") {
       if (ws.ctx || typeof msg.instanceId !== "string" || typeof msg.accessToken !== "string") return;
       const user = await verifyToken(msg.accessToken);
-      if (!user) return send(ws, { type: "error", message: "Login check failed." });
+      if (!user || typeof user.id !== "string") return send(ws, { type: "error", message: "Login check failed. Please reopen the activity." });
 
       const roomId = msg.instanceId.slice(0, 100);
       let room = rooms.get(roomId);
       if (!room) {
-        room = { players: new Map(), hostId: null, phase: "LOBBY", round: 0, deal: null, guess: null, solved: 0, log: "", turn: null, events: [], seq: 0, timer: null };
+        room = { players: new Map(), hostId: null, phase: "LOBBY", round: 0, deal: null, guess: null, solved: 0, log: "", turn: null, events: [], seq: 0, cardSeq: 0, epoch: Math.random().toString(36).slice(2, 8) + Date.now().toString(36), timer: null };
         rooms.set(roomId, room);
       }
       let player = room.players.get(user.id);
       if (player) {
-        if (player.ws && player.ws !== ws) { player.ws.ctx = null; player.ws.close(); }
+        if (player.ws && player.ws !== ws) { player.ws.ctx = null; send(player.ws, { type: "replaced" }); player.ws.close(); }
         player.ws = ws;
         player.seen = new Set(); // this browser has no images yet
       } else {
         if (room.phase !== "LOBBY") {
           return send(ws, { type: "error", message: "A game is already running. Wait for it to end." });
+        }
+        if (room.players.size >= MAX_PLAYERS) {
+          return send(ws, { type: "error", message: "This game room is full." });
         }
         player = {
           id: user.id,
@@ -327,10 +338,11 @@ wss.on("connection", (ws) => {
       const image = msg.image;
       if (!Number.isInteger(slot) || slot < 0 || slot >= CARDS_PER_PLAYER) return;
       if (!name) return send(ws, { type: "error", message: "Type a name for the character." });
-      if (typeof image !== "string" || !image.startsWith("data:image/jpeg;base64,") || image.length > 700000) {
+      if (typeof image !== "string" || image.length > 700000 || !/^data:image\/jpeg;base64,[A-Za-z0-9+/]+={0,2}$/.test(image)) {
         return send(ws, { type: "error", message: "Image rejected (must be a small JPEG)." });
       }
-      player.cards[slot] = { name, image };
+      player.cards[slot] = { id: `${room.epoch}.${++room.cardSeq}`, name, image }; // a new id for every upload
+      send(ws, { type: "uploaded", slot }); // tells the uploader it worked
       return broadcast(room);
     }
 
@@ -355,7 +367,7 @@ wss.on("connection", (ws) => {
         room.deal = null;
         room.turn = null;
         const top = Math.max(...[...room.players.values()].map((p) => p.score));
-        emit(room, "gameEnd", null, { winnerIds: [...room.players.values()].filter((p) => p.score === top).map((p) => p.id) });
+        emit(room, "gameEnd", null, { winnerIds: top > 0 ? [...room.players.values()].filter((p) => p.score === top).map((p) => p.id) : [] });
       } else {
         dealRound(room);
       }
@@ -401,7 +413,9 @@ wss.on("connection", (ws) => {
     // ---- host goes back to lobby: ALL images are deleted ----
     if (msg.type === "reset") {
       if (userId !== room.hostId) return;
+      for (const [id, p] of [...room.players]) if (!p.ws) room.players.delete(id); // people who left cannot block the next game
       for (const p of room.players.values()) {
+        p.seen = new Set();
         p.cards = Array(CARDS_PER_PLAYER).fill(null);
         p.score = 0; p.hist = Array(CARDS_PER_PLAYER).fill(0); p.status = "playing"; p.wrong = 0; p.lastPoints = 0;
       }
@@ -413,7 +427,9 @@ wss.on("connection", (ws) => {
       room.deal = null;
       return broadcast(room);
     }
-  });
+  };
+  ws.on("message", (raw) => { handle(raw).catch((err) => console.error("message error:", err)); });
+  ws.on("error", () => {});
 
   ws.on("close", () => {
     if (!ws.ctx) return;
@@ -437,6 +453,9 @@ wss.on("connection", (ws) => {
     broadcast(room);
   });
 });
+
+process.on("unhandledRejection", (err) => console.error("unhandled:", err));
+process.on("uncaughtException", (err) => console.error("uncaught:", err));
 
 const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => console.log("Server running on port " + PORT));

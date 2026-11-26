@@ -10,12 +10,32 @@ const MIN_PLAYERS = 2;            // keep this at 2 or more (with 1 player there
 const MAX_PLAYERS = 12;           // one game room holds at most this many players
 const CARDS_PER_PLAYER = 3;       // one image per round
 const ROOM_LIFETIME_MS = 2 * 60 * 60 * 1000; // wipe a room after 2 hours
+const MAX_ROOMS = 200;            // a safety cap: instanceId comes from the client, so rooms were unbounded
+const PING_MS = 30 * 1000;        // how often we check that a connection is still alive
 // =====================================
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// One place for log lines, so they all look the same in the host's log viewer.
+const log = (...a) => console.log(new Date().toISOString(), ...a);
+const stats = () => {
+  let players = 0;
+  for (const r of rooms.values()) players += r.players.size;
+  return `rooms=${rooms.size} players=${players}`;
+};
 if (!CLIENT_ID || !CLIENT_SECRET) console.warn("WARNING: CLIENT_ID or CLIENT_SECRET is missing!");
 
 const app = express();
+
+// Discord serves the Activity from discordsays.com and forwards every request whose path
+// starts with /.proxy to this server with that prefix ALREADY REMOVED. Outside Discord
+// (a plain browser, or an automated test) nothing removes it, so the client's /.proxy/...
+// URLs would 404. Stripping it here lets the exact same build run in both places.
+app.use((req, _res, next) => {
+  if (req.url === "/.proxy" || req.url.startsWith("/.proxy/")) req.url = req.url.slice(7) || "/";
+  next();
+});
+
 app.use(express.json());
 
 // Small helper routes
@@ -53,22 +73,31 @@ app.post("/api/token", async (req, res) => {
 app.use(express.static(path.join(__dirname, "../dist")));
 
 const server = http.createServer(app);
-const wss = new WebSocketServer({ server, path: "/ws", maxPayload: 2 * 1024 * 1024 });
+const wss = new WebSocketServer({ noServer: true, maxPayload: 2 * 1024 * 1024 });
+
+// Accept both /ws (inside Discord, where the proxy already stripped /.proxy) and
+// /.proxy/ws (a plain browser or an automated test, where nothing stripped it).
+server.on("upgrade", (req, socket, head) => {
+  let p = (req.url || "").split("?")[0];
+  while (p.length > 1 && p.endsWith("/")) p = p.slice(0, -1);
+  if (p !== "/ws" && p !== "/.proxy/ws") return socket.destroy();
+  wss.handleUpgrade(req, socket, head, (ws) => wss.emit("connection", ws, req));
+});
 
 // rooms: one per Discord activity session. Everything lives in memory only.
 const rooms = new Map();
 
-function deleteRoom(id) {
+function deleteRoom(id, why = "empty") {
   const room = rooms.get(id);
   if (!room) return;
   clearTimeout(room.timer);
   rooms.delete(id); // images are deleted with the room
-  console.log("Room deleted:", id);
+  log(`room closed (${why}) id=${id} ${stats()}`);
 }
 
 function touch(id, room) {
   clearTimeout(room.timer);
-  room.timer = setTimeout(() => deleteRoom(id), ROOM_LIFETIME_MS);
+  room.timer = setTimeout(() => deleteRoom(id, "idle for too long"), ROOM_LIFETIME_MS);
 }
 
 function send(ws, obj) {
@@ -249,7 +278,18 @@ function broadcast(room) {
   }
 }
 
+// Tests and local runs need to sign in without a real Discord account. Fake logins are
+// accepted ONLY when DEV_AUTH=1 is set, which never happens on Render.
+const DEV_AUTH = process.env.DEV_AUTH === "1";
+if (DEV_AUTH) console.warn("WARNING: DEV_AUTH=1 - fake logins are accepted. Never use this in production.");
+
+function devUser(token) {
+  const m = /^dev[.]([A-Za-z0-9_-]{1,32})[.]([^.]{1,32})$/.exec(token);
+  return m ? { id: m[1], username: m[2], global_name: m[2], avatar: null } : null;
+}
+
 async function verifyToken(token) {
+  if (DEV_AUTH) { const u = devUser(token); if (u) return u; }
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), 8000);
   try {
@@ -271,6 +311,8 @@ function allReady(room) {
 
 wss.on("connection", (ws) => {
   ws.ctx = null;
+  ws.alive = true;
+  ws.on("pong", () => { ws.alive = true; });
 
   const handle = async (raw) => {
     let msg;
@@ -284,11 +326,17 @@ wss.on("connection", (ws) => {
 
       const roomId = msg.instanceId.slice(0, 100);
       let room = rooms.get(roomId);
+      if (!room && rooms.size >= MAX_ROOMS) {
+        console.warn("Refused a new room: the", MAX_ROOMS, "room limit is reached");
+        return send(ws, { type: "error", message: "The server is busy. Please try again in a few minutes." });
+      }
       if (!room) {
         room = { players: new Map(), hostId: null, phase: "LOBBY", round: 0, deal: null, guess: null, solved: 0, log: "", turn: null, events: [], seq: 0, cardSeq: 0, epoch: Math.random().toString(36).slice(2, 8) + Date.now().toString(36), timer: null };
         rooms.set(roomId, room);
+        log(`room opened id=${roomId} ${stats()}`);
       }
       let player = room.players.get(user.id);
+      const rejoined = !!player;
       if (player) {
         if (player.ws && player.ws !== ws) { player.ws.ctx = null; send(player.ws, { type: "replaced" }); player.ws.close(); }
         player.ws = ws;
@@ -319,6 +367,7 @@ wss.on("connection", (ws) => {
       if (!room.hostId || !room.players.has(room.hostId)) room.hostId = user.id;
       ws.ctx = { roomId, userId: user.id };
       touch(roomId, room);
+      log(`${rejoined ? "rejoined" : "joined"} room=${roomId} players=${room.players.size} phase=${room.phase}`);
       return broadcast(room);
     }
 
@@ -336,10 +385,12 @@ wss.on("connection", (ws) => {
       const slot = Number(msg.slot);
       const name = typeof msg.name === "string" ? msg.name.trim().slice(0, 30) : "";
       const image = msg.image;
-      if (!Number.isInteger(slot) || slot < 0 || slot >= CARDS_PER_PLAYER) return;
-      if (!name) return send(ws, { type: "error", message: "Type a name for the character." });
+      if (!Number.isInteger(slot) || slot < 0 || slot >= CARDS_PER_PLAYER) {
+        return send(ws, { type: "error", message: "That card does not exist." });
+      }
+      if (!name) return send(ws, { type: "error", slot, message: "Type a name for the character." });
       if (typeof image !== "string" || image.length > 700000 || !/^data:image\/jpeg;base64,[A-Za-z0-9+/]+={0,2}$/.test(image)) {
-        return send(ws, { type: "error", message: "Image rejected (must be a small JPEG)." });
+        return send(ws, { type: "error", slot, message: "Image rejected (must be a small JPEG)." });
       }
       player.cards[slot] = { id: `${room.epoch}.${++room.cardSeq}`, name, image }; // a new id for every upload
       send(ws, { type: "uploaded", slot }); // tells the uploader it worked
@@ -352,6 +403,7 @@ wss.on("connection", (ws) => {
       if (!allReady(room)) return send(ws, { type: "error", message: "Not everyone is ready." });
       room.phase = "ROUND";
       room.round = 0;
+      log(`game started room=${ws.ctx.roomId} players=${room.players.size}`);
       dealRound(room);
       return broadcast(room);
     }
@@ -362,6 +414,7 @@ wss.on("connection", (ws) => {
       for (const p of room.players.values()) p.cards[room.round] = null; // delete
       room.guess = null;
       room.round += 1;
+      log(`round ${room.round} finished room=${ws.ctx.roomId} (its pictures are now deleted)`);
       if (room.round >= CARDS_PER_PLAYER) {
         room.phase = "GAME_END";
         room.deal = null;
@@ -377,6 +430,9 @@ wss.on("connection", (ws) => {
     // ---- guessing and voting ----
     if (msg.type === "guessStart") {
       if (room.phase !== "ROUND" || room.guess || player.status !== "playing" || askerId(room) !== userId) return;
+      if (votersOf(room, { guesserId: userId }).length === 0) {
+        return send(ws, { type: "error", message: "Nobody else is online to judge your guess." });
+      }
       room.guess = { guesserId: userId, votes: new Map() };
       resolveGuess(room); // (ends at once if nobody can vote)
       return broadcast(room);
@@ -443,7 +499,8 @@ wss.on("connection", (ws) => {
     else player.ws = null; // keep them so they can come back mid-game
 
     const online = [...room.players.values()].filter((p) => p.ws);
-    if (online.length === 0) return deleteRoom(roomId);
+    log(`left room=${roomId} phase=${room.phase} still online=${online.length}`);
+    if (online.length === 0) return deleteRoom(roomId, "everybody left");
     if (!room.players.has(room.hostId) || !room.players.get(room.hostId).ws) room.hostId = online[0].id;
     if (room.phase === "ROUND" && room.turn && room.turn.order[room.turn.idx] === userId) advanceTurn(room);
     if (room.guess) {
@@ -454,8 +511,44 @@ wss.on("connection", (ws) => {
   });
 });
 
+// Drop connections that stopped answering, so a vanished player cannot hold up the turn.
+const pinger = setInterval(() => {
+  for (const ws of wss.clients) {
+    if (ws.alive === false) { console.log("Dropping a connection that stopped answering"); ws.terminate(); continue; }
+    ws.alive = false;
+    try { ws.ping(); } catch {}
+  }
+}, PING_MS);
+pinger.unref?.();
+
 process.on("unhandledRejection", (err) => console.error("unhandled:", err));
 process.on("uncaughtException", (err) => console.error("uncaught:", err));
 
+// Lets the test suite look at real server memory and prove that pictures are actually
+// gone after each round. Only mounted when DEV_AUTH=1, which never happens on Render.
+if (DEV_AUTH) {
+  app.get("/__debug/rooms", (_req, res) => {
+    const out = {};
+    for (const [id, room] of rooms) {
+      out[id] = {
+        phase: room.phase,
+        round: room.round,
+        hostId: room.hostId,
+        players: [...room.players.values()].map((p) => ({
+          id: p.id,
+          online: !!p.ws,
+          status: p.status,
+          score: p.score,
+          seen: [...p.seen],
+          // the actual bytes still held in memory, per slot
+          cards: p.cards.map((c) => (c ? { id: c.id, name: c.name, imageBytes: c.image.length } : null)),
+        })),
+        deal: room.deal ? [...room.deal] : null,
+      };
+    }
+    res.json({ roomCount: rooms.size, rooms: out });
+  });
+}
+
 const PORT = process.env.PORT || 3001;
-server.listen(PORT, () => console.log("Server running on port " + PORT));
+server.listen(PORT, () => log(`No peeking! server listening on port ${PORT} (players per room: ${MIN_PLAYERS}-${MAX_PLAYERS}, rounds: ${CARDS_PER_PLAYER})`));

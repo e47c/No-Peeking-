@@ -15,7 +15,7 @@
 }
 * { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; }
-body { margin: 0; min-height: 100vh; background: var(--bg); color: var(--text); font-family: var(--font); font-size: 16px; line-height: 1.5; overflow-x: hidden; }
+body { margin: 0; min-height: 100vh; min-height: 100dvh; background: var(--bg); color: var(--text); font-family: var(--font); font-size: 16px; line-height: 1.5; overflow-x: hidden; }
 button { font: inherit; color: inherit; cursor: pointer; }
 a { color: var(--yolk); }
 h1, h2, h3, p, ol, ul { margin: 0; }
@@ -30,7 +30,7 @@ svg { display: block; }
 .bg { position: fixed; inset: 0; z-index: -1; overflow: hidden; background: radial-gradient(110% 70% at 50% -12%, #3a1d4f 0%, transparent 60%), radial-gradient(80% 60% at 50% 120%, #2a0f1c 0%, transparent 60%), var(--bg); }
 .beam { position: absolute; top: -10%; width: 34vw; height: 120%; transform-origin: 50% 0; filter: blur(8px); mix-blend-mode: screen; background: linear-gradient(180deg, rgba(255, 207, 51, .16), transparent 70%); clip-path: polygon(46% 0, 54% 0, 100% 100%, 0 100%); animation: sway 10s ease-in-out infinite alternate; }
 .b1 { left: 4%; } .b2 { right: 2%; animation-delay: -5s; background: linear-gradient(180deg, rgba(31, 198, 180, .14), transparent 70%); }
-.ghost { position: absolute; width: 110px; height: 140px; border: 2px solid rgba(244, 234, 213, .05); background: rgba(244, 234, 213, .02); border-radius: 6px; animation: drift 26s linear infinite; }
+.bg-ghost { position: absolute; width: 110px; height: 140px; border: 2px solid rgba(244, 234, 213, .05); background: rgba(244, 234, 213, .02); border-radius: 6px; animation: drift 26s linear infinite; }
 .g1 { left: 12%; top: 100%; --r: -10deg; } .g2 { left: 46%; top: 100%; --r: 8deg; animation-delay: -9s; width: 84px; height: 106px; } .g3 { left: 78%; top: 100%; --r: -4deg; animation-delay: -17s; }
 .grain { position: absolute; inset: 0; opacity: .07; mix-blend-mode: overlay; background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 .55 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>"); }
 .vignette { position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 45%, transparent 50%, rgba(0, 0, 0, .6)); }
@@ -191,10 +191,10 @@ svg { display: block; }
 .dock-in { max-width: 1000px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px 18px; padding: 12px 16px; background: var(--surface-2); border: 1px solid var(--line-2); border-radius: var(--r); backdrop-filter: blur(10px); box-shadow: 0 14px 40px rgba(0, 0, 0, .5); }
 .dock.mine .dock-in { border-color: var(--yolk); animation: dockPulse 1.4s ease-in-out infinite alternate; }
 @keyframes dockPulse { from { box-shadow: 0 0 14px rgba(255, 207, 51, .3); } to { box-shadow: 0 0 36px rgba(255, 207, 51, .7); } }
-.dock-info { flex: 1; min-width: 200px; }
+.dock-info { flex: 1 1 220px; min-width: 0; }
 .dock-title { font-weight: 900; font-size: clamp(18px, 4vw, 24px); letter-spacing: .04em; text-transform: uppercase; line-height: 1.1; }
 .dock-sub { color: var(--muted); font-size: 14px; margin-top: 3px; }
-.dock-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.dock-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; flex: 0 0 auto; justify-content: flex-end; }
 
 /* ---------- guess stage ---------- */
 dialog { color: var(--text); padding: 0; border: 0; background: transparent; max-width: 96vw; max-height: 96vh; overflow: visible; }
@@ -315,5 +315,5 @@ dialog[open] { animation: rise .3s var(--ease); } dialog.closing { animation: fa
 /* ---------- reduced motion ---------- */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; animation-delay: 0s !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
-  .beam, .ghost, .rays { display: none; }
+  .beam, .bg-ghost, .rays { display: none; }
 }

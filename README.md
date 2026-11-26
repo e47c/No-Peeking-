@@ -50,3 +50,41 @@ A redeploy restarts the server, so a game in progress is lost. Update when nobod
 
 ## Optional: run on your own computer
 Copy `config.local.example.json` to `config.local.json`, fill it in, then `npm install` and `npm run dev` (and `npm run tunnel`). `config.local.json` is ignored by Git, so it is never uploaded.
+
+---
+
+## Running the game without Discord
+
+Discord only lets the Activity run inside a voice call, which makes it awkward to check
+your work. The game can also run in an ordinary browser tab.
+
+```bash
+npm install
+npm run build
+DEV_AUTH=1 VITE_CLIENT_ID=000000000000000000 CLIENT_SECRET=x npm start
+```
+
+Then open one tab per player:
+
+- <http://localhost:3001/?np_dev=Ana&np_id=a1&np_room=test>
+- <http://localhost:3001/?np_dev=Ben&np_id=b2&np_room=test>
+- <http://localhost:3001/?np_dev=Cleo&np_id=c3&np_room=test>
+
+`np_dev` is the player name, `np_id` their id, and `np_room` puts them in the same game.
+
+**`DEV_AUTH=1` turns off the Discord login check.** Never set it on Render. Without it the
+server refuses these fake logins, so the `?np_dev=` links do nothing on the live site.
+
+## Tests
+
+```bash
+npm test          # everything
+npm run test:server   # game rules, over a real server and real WebSockets
+npm run test:browser  # a full game in a real browser, three players
+```
+
+The browser tests need Chromium once: `npx playwright install chromium`.
+
+`test:browser` plays two complete games with three browser pages. It reads the pixels of
+every card to prove each one shows the picture its owner uploaded, and it reads the
+WebSocket traffic to prove the card you are holding is never sent to your browser at all.

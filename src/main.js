@@ -22,6 +22,11 @@ function icon(id, cls) {
 }
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 const ACCENTS = ["#ff4a2e", "#ffcf33", "#1fc6b4", "#ff8bd0", "#7aa8ff", "#a5e05a", "#c79bff", "#ff9d3d"];
+// Reading a very large file into memory can crash a phone browser, so refuse it up front.
+const MAX_PICK_BYTES = 25 * 1024 * 1024;
+// The free hosting plan sleeps when nobody is playing and can take about a minute to wake.
+const MAX_JOIN_TRIES = 20;
+const MUSIC_BY_SCREEN = { menu: "menu", lobby: "lobby", game: "round", results: "results" };
 
 const A = {
   sdk: null, user: null, token: null, instanceId: null, myId: null,
@@ -83,7 +88,7 @@ function showScreen(name) {
   $("hud").classList.toggle("hidden", name === "loading");
   $("dock").classList.toggle("hidden", name !== "game");
   $("roundLights").classList.toggle("hidden", name !== "game");
-  music.set({ menu: "menu", lobby: "lobby", game: "round", results: "results" }[name] || "off");
+  music.set(MUSIC_BY_SCREEN[name] || "off");
   window.scrollTo(0, 0);
 }
 
@@ -187,6 +192,7 @@ function buildSlots(count) {
       setMsg(i, "");
       if (!f) return;
       if (f.type && !f.type.startsWith("image/")) return setMsg(i, "That is not a picture.", "bad");
+      if (f.size > MAX_PICK_BYTES) { sfx.deny(); return setMsg(i, "That picture is too big. Please pick one under 25 MB.", "bad"); }
       busy(i, true);
       try {
         A.pending[i] = await resizeImage(f);
@@ -318,6 +324,7 @@ function updateTile(t, p, s, idx) {
   const entry = s.table.find((x) => x.holderId === p.id);
   const src = entry ? A.imgCache.get(entry.key) : null;
   const r = t.root;
+  r.dataset.player = p.id; // lets the browser tests find a specific player's card
   r.style.setProperty("--accent", accent(s, p.id));
   r.style.setProperty("--i", idx);
   setAvatar(t.av, p);
@@ -672,7 +679,7 @@ function connect() {
     let msg; try { msg = JSON.parse(e.data); } catch { return; }
     if (msg.type === "state") onState(msg);
     else if (msg.type === "uploaded") onUploaded(msg.slot);
-    else if (msg.type === "error") onServerError(msg.message);
+    else if (msg.type === "error") onServerError(msg.message, msg.slot);
     else if (msg.type === "replaced") onReplaced();
   };
   ws.onclose = () => { if (A.ws !== ws) return; if (A.fatal) return; scheduleRetry(); };
@@ -686,7 +693,7 @@ function onReplaced() { // this account was opened in another window
   $("netBtn").textContent = "Use this window"; $("netBtn").classList.remove("hidden");
 }
 
-function onServerError(message) {
+function onServerError(message, slot) {
   sfx.deny();
   if (!A.joined) { // could not get in (for example a game is already running)
     A.fatal = true;
@@ -695,8 +702,9 @@ function onServerError(message) {
     toast(message || "Could not join.", "bad");
     return;
   }
-  // an upload problem is shown on the card it belongs to
-  const i = [...A.sending][0];
+  // an upload problem is shown on the card it belongs to. The server tells us which one,
+  // which matters when two uploads are in flight at the same time.
+  const i = Number.isInteger(slot) && A.sending.has(slot) ? slot : [...A.sending][0];
   if (i !== undefined) { A.sending.delete(i); clearTimeout(A.slots[i].timer); A.slots[i].save.disabled = false; saveLabel(i); setMsg(i, message, "bad"); }
   else toast(message, "bad");
 }
@@ -705,13 +713,17 @@ function scheduleRetry() {
   A.retry += 1;
   const net = $("net");
   net.classList.remove("hidden");
-  $("netMsg").textContent = A.joined ? `Connection lost. Reconnecting… (${A.retry})` : "Connecting…";
+  if (A.joined) $("netMsg").textContent = `Connection lost. Reconnecting… (${A.retry})`;
+  // The server goes to sleep when nobody is playing. Waking it up takes up to a minute,
+  // so say that plainly instead of giving up after a few seconds.
+  else if (A.retry >= 2) $("netMsg").textContent = "Waking the game server up… this can take up to a minute.";
+  else $("netMsg").textContent = "Connecting…";
   $("netBtn").classList.toggle("hidden", A.retry < 4);
-  if (!A.joined && A.retry >= 3) {
+  if (!A.joined && A.retry >= MAX_JOIN_TRIES) {
     net.classList.add("hidden"); $("playBtn").disabled = false; $("playBtn").textContent = "Play";
     toast("Could not reach the game server. Try again in a moment.", "bad"); A.retry = 0; return;
   }
-  A.retryTimer = setTimeout(connect, Math.min(8000, 800 * 2 ** Math.min(A.retry, 4)));
+  A.retryTimer = setTimeout(connect, Math.min(6000, 700 * 2 ** Math.min(A.retry, 3)));
 }
 
 function joinLobby() {
@@ -732,6 +744,10 @@ function bindUI() {
     if (e.pointerType !== "mouse") return;
     const b = e.target.closest("button:not(:disabled), .drop");
     if (b && b !== last) { last = b; sfx.hover(); } else if (!b) last = null;
+  });
+  // Discord keeps the activity running when you look at another channel. Go quiet.
+  document.addEventListener("visibilitychange", () => {
+    music.set(document.hidden ? "off" : (MUSIC_BY_SCREEN[A.screen] || "off"));
   });
   document.querySelectorAll("[data-close]").forEach((b) => { b.onclick = () => closeDlg(b.closest("dialog")); });
   document.querySelectorAll("dialog").forEach((d) => d.addEventListener("click", (e) => { if (e.target === d && d.id !== "dlgGuess") closeDlg(d); }));
@@ -759,30 +775,44 @@ async function start() {
   bindUI();
   document.body.dataset.screen = "loading";
   try {
-    const sdk = new DiscordSDK(__CLIENT_ID__);
-    A.sdk = sdk;
-    await sdk.ready();
-    const { code } = await sdk.commands.authorize({ client_id: __CLIENT_ID__, response_type: "code", state: "", prompt: "none", scope: ["identify"] });
-    const res = await fetch("/.proxy/api/token", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code }) });
-    const { access_token } = await res.json();
-    if (!access_token) throw new Error("The game server did not accept the login. Please try again.");
-    A.token = access_token;
-    const auth = await sdk.commands.authenticate({ access_token });
-    A.user = auth.user; A.myId = auth.user.id; A.instanceId = sdk.instanceId;
+    // Running outside Discord - local development, or an automated browser test - needs a
+    // way in that does not involve the Discord client at all. The server only accepts
+    // these logins when it was started with DEV_AUTH=1, so in production they are refused.
+    const q = new URLSearchParams(location.search);
+    const devName = q.get("np_dev");
+    if (devName) {
+      const id = q.get("np_id") || devName;
+      A.token = `dev.${id}.${devName}`;
+      A.user = { id, username: devName, global_name: devName, avatar: null };
+      A.myId = id;
+      A.instanceId = q.get("np_room") || "dev-room";
+    } else {
+      const sdk = new DiscordSDK(__CLIENT_ID__);
+      A.sdk = sdk;
+      await sdk.ready();
+      const { code } = await sdk.commands.authorize({ client_id: __CLIENT_ID__, response_type: "code", state: "", prompt: "none", scope: ["identify"] });
+      const res = await fetch("/.proxy/api/token", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code }) });
+      const { access_token } = await res.json();
+      if (!access_token) throw new Error("The game server did not accept the login. Please try again.");
+      A.token = access_token;
+      const auth = await sdk.commands.authenticate({ access_token });
+      A.user = auth.user; A.myId = auth.user.id; A.instanceId = sdk.instanceId;
+    }
 
     try {
       const info = await (await fetch("/.proxy/api/info")).json();
       if (info.publicUrl) {
         const base = info.publicUrl.replace(/\/$/, "");
-        const link = (id, path) => { $(id).onclick = (e) => { e.preventDefault(); sdk.commands.openExternalLink({ url: base + path }); }; };
+        const link = (id, path) => { $(id).onclick = (e) => { e.preventDefault(); if (A.sdk) A.sdk.commands.openExternalLink({ url: base + path }); else window.open(base + path, "_blank", "noopener"); }; };
         link("termsLink", "/legal/terms.html"); link("privacyLink", "/legal/privacy.html");
         $("legal").classList.remove("hidden");
       }
     } catch {}
 
     const chip = $("whoChip");
-    chip.replaceChildren(avatarEl({ id: auth.user.id, avatar: auth.user.avatar, name: auth.user.global_name || auth.user.username }, "sm"),
-      el("span", "", `Playing as ${auth.user.global_name || auth.user.username}`));
+    const label = A.user.global_name || A.user.username;
+    chip.replaceChildren(avatarEl({ id: A.user.id, avatar: A.user.avatar, name: label }, "sm"),
+      el("span", "", `Playing as ${label}`));
     chip.classList.remove("hidden");
     $("playBtn").disabled = false;
     showScreen("menu");

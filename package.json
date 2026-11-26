@@ -2,20 +2,26 @@
   "name": "no-peeking",
   "private": true,
   "type": "module",
-  "engines": { "node": ">=18" },
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
     "dev": "concurrently \"node server/index.js\" \"vite\"",
     "build": "vite build",
     "start": "node server/index.js",
+    "test": "npm run test:server && npm run test:browser",
+    "test:server": "node --test test/game.test.mjs test/deal.test.mjs test/edge.test.mjs",
+    "test:browser": "node --test --test-timeout=900000 test/browser.test.mjs",
     "tunnel": "cloudflared tunnel --url http://localhost:5173"
   },
   "dependencies": {
-    "@discord/embedded-app-sdk": "latest",
-    "express": "^4.19.2",
-    "vite": "^5.4.0",
-    "ws": "^8.18.0"
+    "@discord/embedded-app-sdk": "2.5.0",
+    "express": "4.22.3",
+    "vite": "5.4.21",
+    "ws": "8.23.0"
   },
   "devDependencies": {
-    "concurrently": "^8.2.2"
+    "concurrently": "8.2.2",
+    "playwright": "1.49.1"
   }
 }

@@ -39,14 +39,17 @@ export function flash(kind) {
 }
 
 let raf = 0;
+let parts = [];
+let running = false;
 export function confetti(ms = 2500, count = 140) {
   if (reduce()) count = Math.min(count, 24);
   const cv = document.getElementById("confetti");
   const c = cv.getContext("2d");
-  cv.width = window.innerWidth;
-  cv.height = window.innerHeight;
+  if (cv.width !== window.innerWidth || cv.height !== window.innerHeight) {
+    cv.width = window.innerWidth;
+    cv.height = window.innerHeight;
+  }
   const colors = ["#ff4a2e", "#ffcf33", "#f4ead5", "#1fc6b4", "#34d27b", "#ff8bd0"];
-  const parts = [];
   const spawn = (n) => {
     for (let i = 0; i < n; i++) {
       parts.push({
@@ -60,7 +63,8 @@ export function confetti(ms = 2500, count = 140) {
   };
   spawn(count);
   const start = performance.now();
-  cancelAnimationFrame(raf);
+  if (running) return; // a burst is already in the air; the new pieces just joined it
+  running = true;
   const step = (t) => {
     c.clearRect(0, 0, cv.width, cv.height);
     if (t - start < ms * 0.6) spawn(reduce() ? 0 : 3);
@@ -71,8 +75,10 @@ export function confetti(ms = 2500, count = 140) {
       c.restore();
     }
     for (let i = parts.length - 1; i >= 0; i--) if (parts[i].y > cv.height + 30) parts.splice(i, 1);
-    if (parts.length && t - start < ms + 3500) raf = requestAnimationFrame(step);
-    else c.clearRect(0, 0, cv.width, cv.height);
+    if (parts.length && t - start < ms + 3500) { raf = requestAnimationFrame(step); return; }
+    parts = [];
+    running = false;
+    c.clearRect(0, 0, cv.width, cv.height);
   };
   raf = requestAnimationFrame(step);
 }

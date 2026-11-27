@@ -81,6 +81,7 @@ server refuses these fake logins, so the `?np_dev=` links do nothing on the live
 npm test          # everything
 npm run test:server   # game rules, over a real server and real WebSockets
 npm run test:browser  # a full game in a real browser, three players
+npm run test:audio    # every sound effect measured: level, balance, harshness
 ```
 
 The browser tests need Chromium once: `npx playwright install chromium`.
@@ -88,6 +89,12 @@ The browser tests need Chromium once: `npx playwright install chromium`.
 `test:browser` plays two complete games with three browser pages. It reads the pixels of
 every card to prove each one shows the picture its owner uploaded, and it reads the
 WebSocket traffic to prove the card you are holding is never sent to your browser at all.
+
+`test:audio` renders each of the 27 effects through the real audio graph in an offline
+audio context and measures it. Whether a sound is *pleasant* needs ears, and the checklist
+in `TEST-REPORT.md` covers that, but three things it must be are numbers: nothing clips,
+the set is balanced so no effect drowns its neighbours, and nothing is harsh. It prints a
+table of every effect, so you can also just read it to see what changed.
 
 ## Looking at the design without Discord
 

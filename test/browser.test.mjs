@@ -9,22 +9,11 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
-import { startServer } from "./helpers.mjs";
+import { startServer, buildTheGame } from "./helpers.mjs";
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
-
-// The server serves the built page, so build it here. A placeholder client id is enough:
-// this test signs in through DEV_AUTH and never talks to Discord.
-function buildTheGame() {
-  execFileSync(process.execPath, [path.join(ROOT, "node_modules", "vite", "bin", "vite.js"), "build"], {
-    cwd: ROOT,
-    env: { ...process.env, VITE_CLIENT_ID: process.env.VITE_CLIENT_ID || "000000000000000000" },
-    stdio: "pipe",
-  });
-}
 
 // Each player gets an unmistakable colour per round, so a card showing the wrong picture
 // cannot hide behind JPEG compression.

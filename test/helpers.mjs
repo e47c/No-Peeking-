@@ -1,7 +1,7 @@
 // Test helpers: start a real server, connect real WebSocket clients, play real games.
 // Nothing is mocked except the Discord login (DEV_AUTH=1), which the server only honours
 // when that env var is set.
-import { spawn } from "node:child_process";
+import { spawn, execFileSync } from "node:child_process";
 import { once } from "node:events";
 import WebSocket from "ws";
 import path from "node:path";
@@ -11,6 +11,16 @@ const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 let portCounter = 4100 + (process.pid % 400);
 export const nextPort = () => portCounter++;
+
+// The server serves the built page, so tests that need a browser build it first. A
+// placeholder client id is enough: they sign in through DEV_AUTH and never talk to Discord.
+export function buildTheGame() {
+  execFileSync(process.execPath, [path.join(ROOT, "node_modules", "vite", "bin", "vite.js"), "build"], {
+    cwd: ROOT,
+    env: { ...process.env, VITE_CLIENT_ID: process.env.VITE_CLIENT_ID || "000000000000000000" },
+    stdio: "pipe",
+  });
+}
 
 export async function startServer(env = {}) {
   const port = nextPort();

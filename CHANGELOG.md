@@ -1,5 +1,118 @@
 # Changelog
 
+## Visual and audio upgrade — 27 November 2026
+
+No gameplay, server or rules changes. Everything below is how the game looks and sounds.
+
+### Sound: rebuilt
+
+All 27 effects are still synthesised in code, in one key, and mute, volume and the music
+switch are unchanged and still remembered per device. What changed is how they are made.
+
+Three ideas now hold the set together:
+
+- **One room.** Every voice sends a little signal into the same short reverb. This is the
+  single biggest reason the set now sounds like one instrument kit rather than a pile of
+  separate beeps made at different times.
+- **A ceiling on brightness.** Every noise voice runs through a lowpass filter. The old set
+  reached for a highpass whenever it wanted something to sparkle, which is where the hiss
+  came from — the victory and round-title sounds each carried most of a second of it.
+- **Stereo.** Voices are placed across the field instead of stacked in the middle, so a
+  busy moment reads as several things happening rather than one blob.
+
+Individual sounds that were replaced rather than tuned:
+
+- **The refusal sound** was two square waves at 110 Hz through a lowpass — a buzz. It is
+  now two soft knocks.
+- **The brass** was a bare sawtooth, which sits bright for the whole note. It is now a
+  filtered horn whose brightness opens as the note lands, the way brass actually behaves.
+- **The sad trombone** keeps the joke but slides instead of buzzing.
+- **The drum roll and brush rolls** are band-limited taps that tighten and grow, rather
+  than bursts of hiss.
+
+And three behaviours that were missing:
+
+- **Music gets out of the way.** The pad now ducks under the round title, a guess, the drum
+  roll, a correct answer and the victory fanfare, then comes back. Previously they fought
+  each other.
+- **Rapid clicking no longer stacks.** Each effect has a short gate, so hammering a button
+  gives crisp feedback instead of a machine gun.
+- **The sounds you hear most often vary.** Clicks, ticks and turn changes rotate through a
+  few pitches, so they never settle into an audible loop.
+
+### Sound: now measured, not assumed
+
+`npm run test:audio` renders every effect through the real audio graph — the same voices,
+the same room, the same master chain — in an offline audio context, and measures the
+result. Whether a sound is *pleasant* still needs ears. But four things it must be are
+numbers, and those now run with the rest of the suite:
+
+- nothing clips;
+- each effect sits in the loudness band its job implies, measured as the loudest 300 ms
+  rather than as peak, because peak says almost nothing about how loud a sound feels;
+- the everyday effects stay within 6x of each other, and interface clicks sit below event
+  sounds, which sit below the big moments;
+- nothing is harsh, measured as the share of energy in the range that stings.
+
+Writing that test immediately found three things wrong with the new set that listening on
+one pair of speakers would probably have missed: the hover sound was quiet enough to be
+inaudible; the correct-guess sound — one of the biggest moments in the game — was
+measurably quieter than the refusal knock; and once it was made louder it became the
+harshest sound in the game. All three are fixed.
+
+### Look
+
+The identity is unchanged: paper polaroids, the censor bar, stamps, the dark stage. What
+changed is the system underneath and the amount of care in the details.
+
+- **An elevation scale.** Shadows were ad-hoc rgba values scattered through the file. There
+  are now four steps, used everywhere, so depth is consistent instead of accidental.
+- **Screens arrive in order.** The blocks on a screen rise in sequence rather than all
+  appearing at once.
+- **The action bar announces itself.** It is the thing that tells you what to do next, and
+  when it changed it changed silently. Its contents now animate in.
+- **Paper lies crooked.** Cards and polaroids sit at slight angles that straighten when you
+  hover them, which is what makes them read as objects on a table rather than as boxes.
+- **Buttons feel physical.** A light crosses the face on hover, and the press is crisper.
+- **Numbers do not jiggle.** Scores and counters use tabular figures, so a count-up no
+  longer shifts the layout on every tick.
+- **Contrast.** Muted text and the round chips were the weakest text in the interface;
+  both are lifted.
+- **Your own row is marked** in the final standings.
+
+### The winner screen
+
+- **A spotlight** snaps on with the winner and then breathes, and the stage now has dark
+  corners so the gold reads as a lit centre instead of an even brown haze.
+- **The name is polished gold** — a wide gradient that drifts across the letters.
+- **A ring of light turns slowly** behind the winners' portraits.
+- **The word Champion has flanking rules**, so it reads as a title rather than a stray
+  label.
+- **The podium blocks have a sheen** and rise with a spring rather than a glide.
+- **The confetti is gold** for the victory, so it agrees with the celebration instead of
+  competing with it, and the pieces are two shapes rather than identical rectangles.
+- **More of the ceremony fits.** On a short window the podium and standings are compacted,
+  and scrolling the buttons into view now leaves room at the bottom instead of parking
+  them underneath the credits.
+
+Timing is unchanged, so the ceremony still lines up with the sound: the fanfare's chord
+lands as the podium blocks start to rise. Skip, ties, reconnects and reduced motion all
+behave as before.
+
+### Credits
+
+A small pill in the bottom-left corner: *Discord @brainther · @e47*. It is not clickable,
+so it can never swallow a tap, it shrinks on narrow screens, and it is hidden during play
+because the action bar owns that corner — so it shows on the menu, the lobby and the
+results rather than over the game itself.
+
+### One bug found while doing this
+
+Adding the shared reverb introduced a routing mistake of my own: the music fed the reverb
+from before its on/off gain, so switching music off would have left a tail behind. The
+music bus now feeds the room from after that gain.
+
+
 ## Takeover pass — 26 November 2026
 
 The previous pass had never been run in a real browser or in Discord. The first job was to

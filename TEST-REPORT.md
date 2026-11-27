@@ -5,6 +5,7 @@ Run everything with `npm test`. Chromium is needed once: `npx playwright install
 ```
 test:server   30 tests   pass
 test:browser   1 test    pass   (two full games, three browser pages)
+test:audio     2 tests   pass   (all 27 effects rendered and measured)
 ```
 
 ## What the automated tests cover
@@ -47,6 +48,18 @@ before everyone is ready, and one player alone cannot start at all.
 Malformed uploads are all refused — oversized, PNG, SVG, a plain string, an empty string,
 a number, `null`, broken base64 — and the refusal says which card it belongs to.
 
+### Sound
+
+All 27 effects, rendered offline through the real graph and measured:
+
+- nothing peaks above 0.44 of full scale, so nothing clips;
+- the everyday effects span 4.5x in loudness, inside the 6x the test allows;
+- interface feedback sits below the event sounds, which sit below the big moments;
+- the brightest effect puts 24% of its energy in the stinging range, against a 33% limit.
+
+There is also a test proving the measurement hook only exists behind `?np_dev=`, so it is
+not reachable in the Discord activity.
+
 ### Safety of the development login
 
 There is a test that starts the server **without** `DEV_AUTH` and confirms that the fake
@@ -56,18 +69,25 @@ login is refused and the debug view returns 404. This is the configuration Rende
 
 ### Sound — needs a person with headphones
 
-All 27 effects are synthesised in code, in one key, and nothing plays before the first
-click, which is what browsers require. None of that tells you whether it sounds good.
+Most of what used to be on this list is now measured. `npm run test:audio` renders all 27
+effects through the real audio graph and checks that none clips, that each sits in the
+loudness band its job implies, that the everyday sounds are within 6x of each other, that
+the big moments really are the loudest thing in the game, and that nothing is harsh. It
+prints the whole table, so a regression shows up as a number rather than as a complaint.
 
-- [ ] Every effect plays once, at a sensible level: click, hover, open, close, play, deny,
-      join, leave, save, allReady, intro, deal, yourTurn, turn, react (yes/no/maybe),
-      guess, voteYes, voteNo, correct, wrong, out, reveal, drumroll, tick, thud, roundEnd, win
-- [ ] Nothing is painfully loud next to the others, especially `win` and `intro`
+What is left genuinely needs ears and a real call:
+
+- [ ] The set sounds like one instrument, not a pile of beeps
+- [ ] Nothing is annoying on the tenth hearing — particularly `click`, `hover` and `tick`,
+      which play constantly
 - [ ] The round title sound lands exactly when the title slams in
+- [ ] Music ducks under the big moments and comes back, rather than fighting them
 - [ ] Music does not drown out people talking in the voice call
 - [ ] Mute, volume and the music switch all work, and are remembered after a reload
 - [ ] Sound stops when you switch to another Discord channel and comes back when you return
 - [ ] On a phone, the first tap starts the sound and nothing is blocked
+- [ ] On laptop speakers (no bass), the low sounds — `thump`, `out`, `deny` — are still
+      audible rather than disappearing entirely
 
 ### Discord itself — needs a real voice channel
 

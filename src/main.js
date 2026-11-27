@@ -1,6 +1,6 @@
 import { DiscordSDK } from "@discord/embedded-app-sdk";
 import "./style.css";
-import { audio, sfx, music } from "./audio.js";
+import { audio, sfx, music, measureSfx, sfxNames } from "./audio.js";
 import { confetti, intro, flash, callout } from "./fx.js";
 
 const $ = (id) => document.getElementById(id);
@@ -395,6 +395,9 @@ function renderDock(s) {
   $("dock").classList.toggle("mine", cur === A.myId && !s.roundDone && !s.guess);
   if (sig === A.dockSig) return;
   A.dockSig = sig;
+  // The dock tells you what to do next. When that changes, show the change.
+  const bar = $("dock").firstElementChild;
+  if (bar && !reduceMotion) { bar.classList.remove("swap"); void bar.offsetWidth; bar.classList.add("swap"); }
   const acts = $("dockActions"); acts.replaceChildren();
   const T = (t, sub) => { $("dockTitle").textContent = t; $("dockSub").textContent = sub || ""; };
   const btn = (label, cls, fn) => { const b = el("button", "btn " + cls, label); b.type = "button"; b.onclick = fn; acts.appendChild(b); return b; };
@@ -567,6 +570,7 @@ function renderResults(s, fresh) {
   const ol = $("standings"); ol.replaceChildren();
   sorted.forEach((p) => {
     const li = el("li"); li.style.setProperty("--accent", accent(s, p.id));
+    if (p.id === A.myId) li.classList.add("me");
     const who = el("div", "nm"); who.append(el("span", "", p.id === A.myId ? `${p.name} (you)` : p.name));
     tags(p).forEach((t) => who.appendChild(el("span", "tag", t)));
     li.append(el("span", "pos", String(rankOf(p))), who, chips(p, "chips"), el("span", "tot", `⭐ ${p.score}`));
@@ -596,11 +600,11 @@ function renderResults(s, fresh) {
     $("suspense").classList.add("hidden");
     card.classList.remove("hidden"); card.classList.remove("in"); void card.offsetWidth; card.classList.add("in");
     stage.classList.add("revealed");
-    sfx.win(); flash("good"); confetti(6500, 300);
+    sfx.win(); flash("good"); confetti(6500, 300, "gold");
     countUp($("winScore"), top, (v) => `⭐ ${v}`);
     announce(winText);
   });
-  later(2800, () => confetti(3500, 140));
+  later(2800, () => confetti(3500, 140, "gold"));
   const order = [...pods].sort((a, b) => Number(b.dataset.rank) - Number(a.dataset.rank)); // 3rd, 2nd, 1st
   order.forEach((p, i) => later(3300 + i * 560, () => { p.classList.remove("pre"); sfx.thud(Number(p.dataset.rank)); }));
   later(3300 + order.length * 560 + 400, () => {
@@ -796,6 +800,9 @@ async function start() {
       A.user = { id, username: devName, global_name: devName, avatar: null };
       A.myId = id;
       A.instanceId = q.get("np_room") || "dev-room";
+      // Lets the test suite measure how loud and how bright each effect is. Only ever
+      // reachable on this branch, which the Discord activity never takes.
+      window.__npAudio = { measureSfx, sfxNames };
     } else {
       const sdk = new DiscordSDK(__CLIENT_ID__);
       A.sdk = sdk;

@@ -1,5 +1,142 @@
 # Changelog
 
+## Manga redesign and a calm sound set — 27 November 2026
+
+No gameplay, server or rules changes. Everything below is how the game looks and sounds.
+
+### A note on the reference
+
+This design was built from a reference image supplied by the owner: a JUMP! wallpaper
+built out of copyrighted manga characters and the Shonen Jump wordmark. That file is not
+used anywhere in the game and is not in this repository. The game is publicly distributed
+through Discord, so shipping other people's characters and a publisher's trademark would
+invite a takedown and would likely fail app review.
+
+What was taken from it instead is its visual language, which nobody owns: the ink black,
+crimson and gold palette, the hard diagonal slash, screentone and speed lines, panel
+framing, and heavy italic display type. Every graphic in the game is drawn in CSS or SVG
+here. If original manga-style character art is commissioned later, the layout has places
+for it.
+
+### The visual system
+
+The stylesheet was rewritten around four rules, stated at the top of the file, and almost
+every declaration in it is one of the four applied somewhere:
+
+- **Ink.** Anything that matters sits inside a heavy black border. Shadows are hard
+  offsets rather than blurs, the way flat colour is printed. Radii dropped from 14px to
+  2px: manga panels are cut, not rounded.
+- **Diagonal.** Nothing important is square to the page. Buttons, chips, stamps and
+  banners are skewed; panels are clipped on an angle. Button labels are counter-skewed so
+  the text stays upright and readable.
+- **Screentone.** Flat areas are never flat. Halftone dots, speed lines and paper grain
+  do the work gradients used to do.
+- **Gold is earned.** Crimson is the everyday accent. Gold is reserved for what a player
+  achieved - scores, locked cards, the winner - so it keeps its meaning.
+
+The palette moved from purple-black and orange to ink black, crimson and gold. Display
+type is heavy italic caps throughout. The page itself is now a magazine spread: a gold
+screentone wash, two crimson slashes crossing it, and a slow sweep of speed lines.
+
+Screens no longer fade in; their blocks slide in from the side on a slight skew, like
+panels being laid onto a page.
+
+### Specific screens
+
+- **Menu.** The title is built the way the reference builds its logo: heavy italic caps
+  in a crimson block, hard ink border, hard ink offset, knocked a few degrees off the
+  horizontal.
+- **Lobby.** The two halves are panels with ink borders, a tone wash and a crimson corner
+  flag. Cards sit crooked and straighten on hover.
+- **The table.** A black centre spread with its own tone and speed lines. Whoever is
+  asking gets the panel treatment: straightened, lifted, gold border, and a burst of
+  speed lines behind them. It is the most important state on the screen and the only one
+  with its own background effect.
+- **Reactions** are speech balloons with ink borders and tails.
+- **The round title card** slams in on a diagonal between two black bands.
+- **Callouts** are onomatopoeia panels: skewed blocks with 5px borders and hard shadows.
+
+### The winner screen
+
+- A crimson slash is **drawn across the stage** as the winner lands, scaling out from the
+  left rather than simply appearing.
+- Gold **speed lines** behind the winner, and a turning ring of them behind the portraits.
+- The name is **heavy italic gold** with an ink offset and a crimson offset behind that,
+  and the gold drifts across the letters.
+- **Champion** is a skewed gold tab rather than a line of tracked-out text.
+- The podium blocks are **gold, silver and bronze**, which is new; previously they were
+  tinted with each player's own colour and the ranking had to be read from the numbers.
+
+Two faults from the previous pass are fixed:
+
+- **The confetti was burying the winner.** 300 pieces fell across the full width and
+  covered the name, the crown and the badge row. Pieces now fall down the outer thirds
+  only and leave a clear corridor through the middle, and the burst is half the size. A
+  celebration that hides the thing being celebrated is just weather.
+- **The medal colour followed the slot, not the rank.** On a tie, two players share rank
+  1, and the second of them was being handed the silver block. The colour is now keyed to
+  the rank that is printed on it.
+- **The champion's portrait was the wrong colour.** It fell back to the default accent
+  instead of the player's own, so the winner card disagreed with the podium and the
+  standings directly beneath it.
+
+### Sound: calmer, measurably
+
+The engine is unchanged - still synthesised in code, still one key, still one shared
+room - and mute, volume and the music switch work exactly as before. What changed is the
+level and the brightness of every voice in it.
+
+- The master ceiling came down from 0.9 to 0.74.
+- Every voice lost its top end. The bell cap went from 7.2 kHz to 5.4 kHz, the shimmer
+  from 3.4 to 2.4, the brass filter envelope now opens to 900 Hz instead of 1700, and the
+  attack on it tripled so notes bloom rather than stab.
+- The riser under the round title stops at 2.4 kHz instead of 5.2 kHz.
+- The drum roll, the deal and the clock tick are all darker and quieter.
+- Applause under the victory dropped to half its level.
+
+Measured across all 27 effects, the set is now roughly a third quieter than it was, and
+nothing exceeds 0.29 peak against a ceiling of 1.0.
+
+**The music is now genuinely ambient.** The pad's filter moved from 650 Hz to 430 Hz,
+which puts it under most of the energy in a speaking voice instead of across it; it
+gained a second, slower movement on its own level, so it breathes; chords change every
+14 seconds instead of every 7, and over 3.5 seconds instead of 1.4; and the sparse
+marimba notes are longer, quieter and up to twice as far apart. During a round it plays
+at roughly half its previous level.
+
+### The test moved with it
+
+`npm run test:audio` still renders every effect through the real graph and measures it.
+Three limits were tightened now that the set is calm, rather than left where a louder set
+had put them:
+
+- the peak limit came down from 0.85 to **0.45**. It is no longer a clipping guard; it is
+  a promise that nothing in the game ever shouts;
+- the harshness limit came down from 0.33 to **0.3** of energy in the stinging range;
+- every loudness band moved down together, so whisper still sits under the everyday
+  sounds and those still sit under the big moments - the whole game is simply quieter.
+
+One number was moved the other way and is worth naming: the floor of the "big" band was
+set to 0.038 and the correct-guess chord measured 0.0373. Rather than inflate the sound
+to clear a threshold invented five minutes earlier, the floor went to 0.034. The invariant
+that actually matters - that no everyday sound reaches the level of a big moment - is
+asserted separately, and the loudest everyday sound is 0.0288.
+
+### What is not here
+
+The brief asked for sound effects and music downloaded from Pixabay, Kenney and similar,
+bundled into the project. That has not been done:
+
+- Pixabay returns 403 to automated clients.
+- Kenney's packs are CC0, but the download sits behind a donation ask that the author put
+  there deliberately, and the site carries `noai` and `tdm-reservation` signals. Scripting
+  past that is exactly what the interstitial exists to prevent.
+
+The calm set above is synthesised, so it costs nothing to download, carries no licence
+risk, and can be measured. If sampled audio is still wanted, the files only need to be
+dropped into the project and the loader pointed at them; the mixer, ducking, gating, mute
+and volume all stay as they are.
+
 ## Visual and audio upgrade — 27 November 2026
 
 No gameplay, server or rules changes. Everything below is how the game looks and sounds.

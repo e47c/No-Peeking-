@@ -73,7 +73,7 @@ function buildGraph(context) {
   const limiter = ctx.createDynamicsCompressor();
   limiter.threshold.value = -3; limiter.knee.value = 0; limiter.ratio.value = 20;
   limiter.attack.value = 0.001; limiter.release.value = 0.09;
-  const ceiling = ctx.createGain(); ceiling.gain.value = 0.9;
+  const ceiling = ctx.createGain(); ceiling.gain.value = 0.74;
   master.connect(hp); hp.connect(glue); glue.connect(limiter);
   limiter.connect(ceiling); ceiling.connect(ctx.destination);
 
@@ -194,7 +194,7 @@ function mallet(f, t, v = 0.22, len = 0.5, out = sfxBus, pan = 0) {
   tone("sine", f, t, len, v, { a: 0.003, out, pan, send: 0.16 });
   tone("sine", f * 3.93, t, len * 0.3, v * 0.3, { a: 0.002, out, pan, send: 0.1 });
   tone("sine", f * 9.2, t, 0.05, v * 0.1, { a: 0.001, out, pan, send: 0.06 });
-  nz(t, 0.016, v * 0.16, { f: 2400, q: 1.2, ceil: 5200, out, pan, send: 0.05 });
+  nz(t, 0.016, v * 0.1, { f: 1800, q: 1.2, ceil: 3600, out, pan, send: 0.05 });
 }
 
 function glass(f, t, v = 0.13, d = 1.2, out = sfxBus, pan = 0) {
@@ -205,7 +205,7 @@ function glass(f, t, v = 0.13, d = 1.2, out = sfxBus, pan = 0) {
   mg.gain.exponentialRampToValueAtTime(1, t + d * 0.45);
   m.connect(mg); mg.connect(c.frequency);
   const cap = ctx.createBiquadFilter();
-  cap.type = "lowpass"; cap.frequency.value = 7200;
+  cap.type = "lowpass"; cap.frequency.value = 5400;
   env(g, t, 0.004, d, v);
   c.connect(cap); cap.connect(g); g.connect(chan(out, pan, 0.3));
   c.start(t); m.start(t); c.stop(t + d + 0.1); m.stop(t + d + 0.1);
@@ -215,7 +215,7 @@ function glass(f, t, v = 0.13, d = 1.2, out = sfxBus, pan = 0) {
 // lands, which is what a real brass section does and what a bare sawtooth never does.
 function horn(f, t, d, v = 0.13, pan = 0) {
   [-6, 7].forEach((det, i) => tone("sawtooth", f, t, d, v * 0.6, {
-    a: 0.028, det, lp: 420, lpTo: 1700, q: 1.1, sus: d * 0.25,
+    a: 0.055, det, lp: 320, lpTo: 900, q: 1.1, sus: d * 0.25,
     pan: pan + (i ? 0.16 : -0.16), send: 0.22,
   }));
   tone("sine", f / 2, t, d, v * 0.5, { a: 0.02, pan, send: 0.1 });
@@ -227,14 +227,14 @@ function thump(t, v = 0.36, f = 140, pan = 0) {
 }
 
 function swish(t, d, v, up = true, pan = 0) {
-  nz(t, d, v, { f: up ? 500 : 4200, to: up ? 4200 : 500, q: 0.7, ceil: 7000, a: d * 0.35, pan, send: 0.3 });
+  nz(t, d, v, { f: up ? 420 : 2800, to: up ? 2800 : 420, q: 0.7, ceil: 4800, a: d * 0.45, pan, send: 0.3 });
 }
 
 // A shimmer where a cymbal would go: band-limited, so it sparkles without stinging. It
 // turns up in every big moment, so its ceiling sets the brightness of the whole game.
 function shimmer(t, v = 0.09, d = 0.9, pan = 0) {
-  nz(t, d, v, { f: 3400, q: 0.4, ceil: 7600, a: 0.004, pan, send: 0.4 });
-  nz(t, d * 0.4, v * 0.5, { f: 5200, q: 0.5, ceil: 7600, a: 0.002, pan: -pan, send: 0.3 });
+  nz(t, d, v, { f: 2400, q: 0.4, ceil: 5000, a: 0.02, pan, send: 0.4 });
+  nz(t, d * 0.4, v * 0.5, { f: 3400, q: 0.5, ceil: 5000, a: 0.012, pan: -pan, send: 0.3 });
 }
 
 function sparkle(t, n, v, spread = 0.5) {
@@ -276,7 +276,7 @@ const SFX = {
     tone("sine", f, t, 0.045, 0.13, { to: f * 0.68, a: 0.002, send: 0.08 });
     nz(t, 0.014, 0.065, { f: 2100, q: 2.2, ceil: 4200, send: 0.06 });
   },
-  hover: () => tone("sine", 1500, now(), 0.055, 0.05, { a: 0.007, send: 0.12 }),
+  hover: () => tone("sine", 1150, now(), 0.06, 0.05, { a: 0.012, send: 0.12 }),
   open: () => { const t = now(); swish(t, 0.2, 0.09, true); mallet(nt(12), t + 0.07, 0.11, 0.34); },
   close: () => { const t = now(); swish(t, 0.16, 0.08, false); mallet(nt(5), t + 0.04, 0.07, 0.24); },
   play: () => {
@@ -309,14 +309,14 @@ const SFX = {
   save: () => {
     const t = now();
     nz(t, 0.09, 0.08, { f: 1600, q: 0.9, ceil: 5000, send: 0.12 });  // paper
-    thump(t + 0.02, 0.3, 130);                                       // the stamp landing
+    thump(t + 0.02, 0.21, 130);                                      // the stamp landing
     glass(nt(19), t + 0.07, 0.1, 1);
     glass(nt(24), t + 0.17, 0.06, 1.1);
   },
   allReady: () => {
     const t = now();
-    [0, 4, 7, 12].forEach((s, i) => mallet(nt(s), t + i * 0.075, 0.2, 0.55, sfxBus, (i - 1.5) * 0.18));
-    [0, 7, 12, 16].forEach((s, i) => glass(nt(s + 12), t + 0.34, 0.055, 1.5, sfxBus, (i - 1.5) * 0.2));
+    [0, 4, 7, 12].forEach((s, i) => mallet(nt(s), t + i * 0.075, 0.15, 0.55, sfxBus, (i - 1.5) * 0.18));
+    [0, 7, 12, 16].forEach((s, i) => glass(nt(s + 12), t + 0.34, 0.04, 1.5, sfxBus, (i - 1.5) * 0.2));
   },
 
   // --- the round ---
@@ -325,20 +325,20 @@ const SFX = {
   intro: () => {
     const t = now();
     duck(0.25, 2.4);
-    nz(t, 0.8, 0.16, { f: 180, to: 5200, q: 0.6, ceil: 7500, a: 0.55, send: 0.35 });
+    nz(t, 0.8, 0.1, { f: 180, to: 2400, q: 0.6, ceil: 4600, a: 0.6, send: 0.35 });
     tone("sawtooth", 70, t, 0.8, 0.07, { to: 280, lp: 300, lpTo: 1100, a: 0.5, send: 0.2 });
-    roll(t + 0.12, 0.62, 0.1);
+    roll(t + 0.12, 0.62, 0.06);
     const h = t + 0.8;
-    thump(h, 0.42, 150);
-    [0, 7, 12].forEach((s, i) => horn(nt(s - 12), h, 0.5, 0.12, (i - 1) * 0.3));
-    shimmer(h, 0.085, 1.1);
-    sparkle(h + 0.1, 5, 0.05, 0.5);
+    thump(h, 0.24, 130);
+    [0, 7, 12].forEach((s, i) => horn(nt(s - 12), h, 0.7, 0.105, (i - 1) * 0.3));
+    shimmer(h, 0.045, 1.3);
+    sparkle(h + 0.1, 4, 0.03, 0.5);
   },
   deal: (n = 3) => {
     const t = now();
     for (let i = 0; i < n; i++) {
       const o = t + i * 0.125, p = (i % 2 ? 1 : -1) * 0.3;
-      nz(o, 0.075, 0.15, { f: 1300, to: 3600, q: 0.9, ceil: 6000, a: 0.012, pan: p, send: 0.2 });
+      nz(o, 0.075, 0.1, { f: 1100, to: 2400, q: 0.9, ceil: 4200, a: 0.02, pan: p, send: 0.2 });
       tone("sine", 190, o + 0.045, 0.08, 0.12, { to: 105, pan: p, send: 0.08 });
     }
   },
@@ -361,7 +361,7 @@ const SFX = {
     const t = now();
     duck(0.3, 1.2);
     tone("sawtooth", 73, t, 1.1, 0.1, { lp: 180, lpTo: 520, a: 0.7, send: 0.2 });
-    roll(t, 1, 0.14);
+    roll(t, 1, 0.085);
     [0, 1, 2, 3].forEach((i) => tone("sine", 1400, t + i * 0.25, 0.04, 0.07, { send: 0.2, pan: i % 2 ? 0.3 : -0.3 }));
   },
   voteYes: () => { const t = now(); mallet(nt(12), t, 0.17, 0.4); mallet(nt(16), t + 0.07, 0.17, 0.5); },
@@ -373,15 +373,15 @@ const SFX = {
   correct: () => {
     const t = now();
     duck(0.3, 1.6);
-    [[12, 0], [16, 0.09], [19, 0.18]].forEach(([s, d]) => horn(nt(s), t + d, 0.22, 0.17));
+    [[12, 0], [16, 0.09], [19, 0.18]].forEach(([s, d]) => horn(nt(s), t + d, 0.3, 0.125));
     // The chord it lands on is three notes at once, which is what makes it feel like an
     // arrival rather than one more note in the run.
-    [24, 19, 16].forEach((s, i) => horn(nt(s), t + 0.3, 0.6, i ? 0.12 : 0.18, (i - 1) * 0.3));
-    thump(t + 0.3, 0.26, 160);
+    [24, 19, 16].forEach((s, i) => horn(nt(s), t + 0.3, 0.8, i ? 0.12 : 0.175, (i - 1) * 0.3));
+    thump(t + 0.3, 0.15, 140);
     [19, 24, 28].forEach((s, i) => glass(nt(s), t + 0.3 + i * 0.05, 0.055, 1.5, sfxBus, (i - 1) * 0.3));
     [0, 4, 7, 12, 16].forEach((s, i) => mallet(nt(s + 12), t + 0.08 + i * 0.055, 0.09, 0.35, sfxBus, (i - 2) * 0.16));
-    shimmer(t + 0.3, 0.07, 1);
-    sparkle(t + 0.35, 5, 0.035, 0.6);
+    shimmer(t + 0.3, 0.042, 1.2);
+    sparkle(t + 0.35, 4, 0.024, 0.6);
   },
   // Still a sad slide, but a smooth one. Filtered saws gliding down beat a buzz.
   wrong: () => {
@@ -407,14 +407,14 @@ const SFX = {
   drumroll: () => {
     const t = now();
     duck(0.25, 2.2);
-    roll(t, 1.7, 0.2);
-    tone("sawtooth", 65, t, 1.8, 0.1, { lp: 160, lpTo: 420, a: 1.2, send: 0.2 });
-    nz(t + 1.42, 0.42, 0.11, { f: 300, to: 4200, q: 0.6, ceil: 7000, a: 0.3, send: 0.35 });
+    roll(t, 1.7, 0.12);
+    tone("sawtooth", 65, t, 1.8, 0.075, { lp: 160, lpTo: 340, a: 1.2, send: 0.2 });
+    nz(t + 1.42, 0.42, 0.07, { f: 300, to: 2200, q: 0.6, ceil: 4400, a: 0.34, send: 0.35 });
   },
   tick: () => {
     const t = now();
-    nz(t, 0.02, 0.08, { f: [2600, 2900, 2400][tickI++ % 3], q: 3, ceil: 5200, send: 0.1 });
-    tone("sine", 1500, t, 0.03, 0.055, { send: 0.08 });
+    nz(t, 0.02, 0.055, { f: [1700, 1900, 1550][tickI++ % 3], q: 3, ceil: 3400, send: 0.1 });
+    tone("sine", 1050, t, 0.035, 0.04, { send: 0.08 });
   },
   thud: (rank = 1) => {
     const t = now();
@@ -430,15 +430,15 @@ const SFX = {
     const t = now();
     duck(0.18, 4.2);
     [[0, 0], [0, 0.14], [0, 0.28], [4, 0.42], [7, 0.64], [4, 0.86], [7, 1.04]]
-      .forEach(([s, d]) => horn(nt(s + 12), t + d, 0.2, 0.16));
-    horn(nt(24), t + 1.3, 1.1, 0.19);
-    horn(nt(19), t + 1.3, 1.1, 0.13, -0.3);
-    horn(nt(16), t + 1.3, 1.1, 0.13, 0.3);
+      .forEach(([s, d]) => horn(nt(s + 12), t + d, 0.28, 0.105));
+    horn(nt(24), t + 1.3, 1.5, 0.125);
+    horn(nt(19), t + 1.3, 1.5, 0.085, -0.3);
+    horn(nt(16), t + 1.3, 1.5, 0.085, 0.3);
     [12, 16, 19, 24].forEach((s, i) => glass(nt(s), t + 1.3, 0.09, 2.2, sfxBus, (i - 1.5) * 0.25));
-    thump(t + 1.3, 0.34, 150);
-    shimmer(t + 1.3, 0.12, 1.6);
-    sparkle(t + 1.4, 10, 0.055, 1.4);
-    applause(t + 1.25, 3.2, 0.07);
+    thump(t + 1.3, 0.19, 135);
+    shimmer(t + 1.3, 0.07, 2);
+    sparkle(t + 1.4, 8, 0.034, 1.4);
+    applause(t + 1.25, 3.4, 0.034);
   },
 };
 
@@ -465,10 +465,15 @@ export const sfxNames = Object.keys(SFX);
 export const sfx = Object.fromEntries(sfxNames.map((k) => [k, gated(k, SFX[k])]));
 
 // ---------- ambient music: a slow pad + sparse marimba notes ----------
+// The brief for this is "plays for an hour without anyone noticing it, and nobody asks
+// for it to be turned off". That means: no rhythm, no melody anyone could hum back, a
+// dark filter so it sits under speech rather than across it, and long gaps. The pad
+// breathes rather than pulses, and chords change slowly enough that you cannot predict
+// the next one.
 const CH = [[-12, -5, 1, 4], [-15, -8, -3, 0], [-7, -3, 0, 4], [-5, 0, 2, 7]];
 const PENT = [0, 2, 4, 7, 9, 12, 14, 16, 19];
-const LEVEL = { menu: 0.06, lobby: 0.05, round: 0.028, results: 0.07 };
-const GAPS = { menu: [2.5, 5], lobby: [3, 6], round: [6, 11], results: [2, 4] };
+const LEVEL = { menu: 0.042, lobby: 0.034, round: 0.016, results: 0.05 };
+const GAPS = { menu: [5, 10], lobby: [6, 12], round: [11, 20], results: [4, 8] };
 
 export const music = {
   mode: "off", pad: null, pluck: null, chordTimer: null, idx: 0,
@@ -483,24 +488,30 @@ export const music = {
   startPad() {
     if (this.pad) return;
     const gain = ctx.createGain(); gain.gain.value = 0.0001;
-    const lp = ctx.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 650;
+    // Dark, and it drifts. 430 Hz is below most of the energy in a speaking voice, so
+    // the pad fills the room without competing with the people in it.
+    const lp = ctx.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 430;
     const lfo = ctx.createOscillator(), lg = ctx.createGain();
-    lfo.frequency.value = 0.09; lg.gain.value = 220; lfo.connect(lg); lg.connect(lp.frequency); lfo.start();
+    lfo.frequency.value = 0.045; lg.gain.value = 150; lfo.connect(lg); lg.connect(lp.frequency); lfo.start();
+    // A second, slower movement on the level itself: the pad inhales and exhales.
+    const breath = ctx.createOscillator(), bg = ctx.createGain();
+    breath.frequency.value = 0.028; bg.gain.value = 0.3; breath.connect(bg); breath.start();
     const oscs = CH[0].map((s, i) => {
       const o = ctx.createOscillator(); o.type = i % 2 ? "triangle" : "sine";
-      o.frequency.value = nt(s); o.detune.value = (i - 1.5) * 5;
+      o.frequency.value = nt(s); o.detune.value = (i - 1.5) * 4;
       // Spread the pad voices across the field so it sits behind the effects.
       const p = ctx.createStereoPanner ? ctx.createStereoPanner() : null;
       if (p) { p.pan.value = (i - 1.5) * 0.35; o.connect(p); p.connect(lp); } else o.connect(lp);
       o.start(); return o;
     });
     lp.connect(gain); gain.connect(musicIn);
-    this.pad = { gain, oscs, lfo, lp };
+    bg.connect(gain.gain);
+    this.pad = { gain, oscs, lfo, lp, breath };
     this.chordTimer = setInterval(() => {
       if (!this.pad || !ctx) return;
       this.idx = (this.idx + 1) % CH.length;
-      this.pad.oscs.forEach((o, i) => o.frequency.setTargetAtTime(nt(CH[this.idx][i]), now(), 1.4));
-    }, 7000);
+      this.pad.oscs.forEach((o, i) => o.frequency.setTargetAtTime(nt(CH[this.idx][i]), now(), 3.5));
+    }, 14000);
   },
   schedulePluck() {
     if (this.pluck) return;
@@ -508,19 +519,20 @@ export const music = {
       this.pluck = null;
       if (!ctx || this.mode === "off" || !st.music || ctx.state !== "running") return;
       const s = PENT[Math.floor(Math.random() * PENT.length)] + (Math.random() < 0.4 ? 12 : 0);
-      try { mallet(nt(s), now(), (LEVEL[this.mode] || 0.04) * 1.4, 1.1, musicIn, (Math.random() - 0.5) * 0.8); } catch {}
+      try { mallet(nt(s), now(), (LEVEL[this.mode] || 0.04) * 1.1, 1.8, musicIn, (Math.random() - 0.5) * 0.8); } catch {}
       const [a, b] = GAPS[this.mode] || [3, 6];
       this.pluck = setTimeout(go, (a + Math.random() * (b - a)) * 1000);
     };
-    this.pluck = setTimeout(go, 800);
+    this.pluck = setTimeout(go, 2500);
   },
   stopAll() {
     if (this.pluck) { clearTimeout(this.pluck); this.pluck = null; }
     if (this.pad && ctx) {
       const p = this.pad; this.pad = null;
       clearInterval(this.chordTimer);
-      p.gain.gain.setTargetAtTime(0.0001, now(), 0.2);
-      setTimeout(() => { try { p.oscs.forEach((o) => o.stop()); p.lfo.stop(); } catch {} }, 900);
+      p.gain.gain.cancelScheduledValues(now());
+      p.gain.gain.setTargetAtTime(0.0001, now(), 0.35);
+      setTimeout(() => { try { p.oscs.forEach((o) => o.stop()); p.lfo.stop(); p.breath.stop(); } catch {} }, 1600);
     }
   },
 };

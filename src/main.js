@@ -547,7 +547,14 @@ function renderResults(s, fresh) {
   const card = $("winnerCard");
   card.classList.remove("in");
   card.dataset.has = winners.length ? "1" : "0"; card.dataset.top = String(top);
-  $("winAvatars").replaceChildren(...winners.map((p) => avatarEl(p, "xl")));
+  // The champion's portrait has to be their own colour. Without this it fell back to
+  // the default accent, so the winner card showed a different colour from the podium
+  // and the standings directly below it.
+  $("winAvatars").replaceChildren(...winners.map((p) => {
+    const a = avatarEl(p, "xl");
+    a.style.setProperty("--accent", accent(s, p.id));
+    return a;
+  }));
   $("winAvatars").classList.toggle("many", winners.length > 1);
   $("winKicker").textContent = winners.length > 1 ? "Co-champions" : "Champion";
   $("winName").textContent = winners.map((p) => p.name).join(" & ");
@@ -559,7 +566,7 @@ function renderResults(s, fresh) {
   const pod = $("podium"); pod.replaceChildren();
   [1, 0, 2].filter((i) => sorted[i]).forEach((i) => {
     const p = sorted[i];
-    const d = el("div", `pod p${i + 1} pre`); d.dataset.rank = String(i + 1); d.style.setProperty("--accent", accent(s, p.id));
+    const d = el("div", `pod p${i + 1} m${Math.min(rankOf(p), 3)} pre`); d.dataset.rank = String(i + 1); d.style.setProperty("--accent", accent(s, p.id));
     if (winners.includes(p)) d.appendChild(icon("i-crown", "crown"));
     const step = el("div", "step"); step.append(el("div", "rank", String(rankOf(p))), el("div", "pts", `⭐ ${p.score}`));
     d.append(avatarEl(p, "lg"), el("div", "pname", p.name), step);
@@ -600,11 +607,11 @@ function renderResults(s, fresh) {
     $("suspense").classList.add("hidden");
     card.classList.remove("hidden"); card.classList.remove("in"); void card.offsetWidth; card.classList.add("in");
     stage.classList.add("revealed");
-    sfx.win(); flash("good"); confetti(6500, 300, "gold");
+    sfx.win(); flash("good"); confetti(6000, 150, "gold", true);
     countUp($("winScore"), top, (v) => `⭐ ${v}`);
     announce(winText);
   });
-  later(2800, () => confetti(3500, 140, "gold"));
+  later(2800, () => confetti(3500, 80, "gold", true));
   const order = [...pods].sort((a, b) => Number(b.dataset.rank) - Number(a.dataset.rank)); // 3rd, 2nd, 1st
   order.forEach((p, i) => later(3300 + i * 560, () => { p.classList.remove("pre"); sfx.thud(Number(p.dataset.rank)); }));
   later(3300 + order.length * 560 + 400, () => {

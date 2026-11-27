@@ -52,10 +52,15 @@ a number, `null`, broken base64 — and the refusal says which card it belongs t
 
 All 27 effects, rendered offline through the real graph and measured:
 
-- nothing peaks above 0.44 of full scale, so nothing clips;
-- the everyday effects span 4.5x in loudness, inside the 6x the test allows;
-- interface feedback sits below the event sounds, which sit below the big moments;
-- the brightest effect puts 24% of its energy in the stinging range, against a 33% limit.
+- nothing peaks above 0.29 of full scale, against a 0.45 limit. That limit is no longer
+  a clipping guard - it is a promise that nothing in the game ever shouts;
+- the everyday effects span 3.6x in loudness, inside the 6x the test allows;
+- interface feedback sits below the event sounds, which sit below the big moments. The
+  loudest everyday sound measures 0.0288 and the quietest big moment 0.0373;
+- the brightest effect puts 23% of its energy in the stinging range, against a 30% limit.
+
+The whole set is roughly a third quieter than it was before the calm pass, and every
+loudness band in the test moved down with it.
 
 There is also a test proving the measurement hook only exists behind `?np_dev=`, so it is
 not reachable in the Discord activity.
@@ -82,7 +87,9 @@ What is left genuinely needs ears and a real call:
       which play constantly
 - [ ] The round title sound lands exactly when the title slams in
 - [ ] Music ducks under the big moments and comes back, rather than fighting them
-- [ ] Music does not drown out people talking in the voice call
+- [ ] Music does not drown out people talking in the voice call. The pad is filtered at
+      430 Hz specifically to sit under a speaking voice, but only a real call proves it
+- [ ] The music can play for an hour without anyone asking for it to be turned off
 - [ ] Mute, volume and the music switch all work, and are remembered after a reload
 - [ ] Sound stops when you switch to another Discord channel and comes back when you return
 - [ ] On a phone, the first tap starts the sound and nothing is blocked

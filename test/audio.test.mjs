@@ -33,12 +33,15 @@ const tierOf = (n) => TIER[n] || "normal";
 // Bands on short-term loudness (the loudest 300 ms), not on peak. Peak says how close a
 // sound is to clipping; it says almost nothing about how loud it feels, because a lone
 // low sine peaks high while a dense chord of the same loudness does not.
+// Rescaled when the set was rebuilt to be calm. Every band moved down together, so the
+// relationships below - whisper under normal under big - still carry their meaning; the
+// whole game is simply quieter than it was, which is the point.
 const BAND = {
   // tier      quietest  loudest
-  whisper: [0.0008, 0.012],
-  normal: [0.005, 0.050],
-  bed: [0.015, 0.040],
-  big: [0.055, 0.100],
+  whisper: [0.0005, 0.0075],
+  normal: [0.0040, 0.0340],
+  bed: [0.0120, 0.0300],
+  big: [0.0340, 0.0750],
 };
 
 // How long each effect is allowed to run for. Short feedback must not drone, and the
@@ -89,7 +92,9 @@ test("every sound effect is present, balanced and free of harshness", async (t) 
 
     // 2. Nothing clips. The master chain ends in a limiter and a 0.9 ceiling, so a peak
     //    at or above 1.0 would mean something has gone wrong with it.
-    assert.ok(r.peak < 0.85, `${r.name} peaks at ${r.peak.toFixed(3)} - too close to clipping`);
+    //    A calm set should not come near the ceiling at all. 0.45 is no longer a
+    //    clipping guard; it is a promise that nothing in the game ever shouts.
+    assert.ok(r.peak < 0.45, `${r.name} peaks at ${r.peak.toFixed(3)} - too loud for a calm set`);
 
     // 3. Loudness matches what the sound is for.
     const tier = tierOf(r.name);
@@ -102,9 +107,9 @@ test("every sound effect is present, balanced and free of harshness", async (t) 
     //    than an absolute, because a sound that is meant to be three times louder than
     //    the rest carries three times the energy everywhere, high end included - that is
     //    loudness, not harshness, and loudness is checked above. For scale: a pure mid
-    //    tone lands near 0.02 and unfiltered white noise near 0.65, so a third of the
-    //    energy in the sting range is where a sound starts to tire the listener out.
-    assert.ok(r.hfRatio < 0.33,
+    //    tone lands near 0.02 and unfiltered white noise near 0.65. The limit came down
+    //    from a third to under 0.3 when every voice gained a lower brightness ceiling.
+    assert.ok(r.hfRatio < 0.3,
       `${r.name} is harsh: ${(r.hfRatio * 100).toFixed(1)}% of its energy is in the stinging range`);
 
     // 5. Length is appropriate.

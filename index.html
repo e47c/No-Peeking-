@@ -96,6 +96,7 @@
       <section id="screen-results" class="screen results hidden">
         <div id="winStage" class="win-stage">
           <div class="rays" aria-hidden="true"></div>
+          <div class="spot" aria-hidden="true"></div>
           <button id="skipBtn" class="btn ghost small hidden" type="button">Skip</button>
           <div id="suspense" class="suspense hidden" aria-hidden="true">And the winner is…</div>
           <div id="winnerCard" class="winner-card hidden">
@@ -165,6 +166,12 @@
     <div id="net" class="net hidden" role="status"><span id="netMsg"></span><button id="netBtn" class="btn small hidden" type="button" data-sfx="none">Retry now</button></div>
     <div id="toast" class="toast" role="alert" hidden></div>
     <div id="announcer" class="sr-only" aria-live="polite"></div>
+
+    <!-- credits -->
+    <aside class="credits">
+      <svg aria-hidden="true"><use href="#i-eye"/></svg>
+      <span>Discord <b>@brainther</b><i aria-hidden="true">·</i><b>@e47</b></span>
+    </aside>
 
     <script type="module" src="/src/main.js"></script>
   </body>

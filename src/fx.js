@@ -47,7 +47,13 @@ const REFERENCE_AREA = 1280 * 800;
 const densityScale = () =>
   Math.max(0.18, Math.min(1, (window.innerWidth * window.innerHeight) / REFERENCE_AREA));
 
-export function confetti(ms = 2500, count = 140) {
+const PALETTES = {
+  party: ["#ff4a2e", "#ffcf33", "#f4ead5", "#1fc6b4", "#34d27b", "#ff8bd0"],
+  // The winner moment is gold, so the confetti agrees with it instead of competing.
+  gold: ["#ffcf33", "#fff6d8", "#e0861a", "#f4ead5", "#ff9d3d", "#ffe9a3"],
+};
+
+export function confetti(ms = 2500, count = 140, palette = "party") {
   count = Math.max(10, Math.round(count * densityScale()));
   if (reduce()) count = Math.min(count, 24);
   const cv = document.getElementById("confetti");
@@ -56,7 +62,7 @@ export function confetti(ms = 2500, count = 140) {
     cv.width = window.innerWidth;
     cv.height = window.innerHeight;
   }
-  const colors = ["#ff4a2e", "#ffcf33", "#f4ead5", "#1fc6b4", "#34d27b", "#ff8bd0"];
+  const colors = PALETTES[palette] || PALETTES.party;
   const spawn = (n) => {
     for (let i = 0; i < n; i++) {
       parts.push({
@@ -64,6 +70,7 @@ export function confetti(ms = 2500, count = 140) {
         vx: (Math.random() - 0.5) * 4, vy: 2 + Math.random() * 5,
         r: Math.random() * 6.28, vr: (Math.random() - 0.5) * 0.4,
         w: 6 + Math.random() * 8, h: 10 + Math.random() * 10,
+        round: Math.random() < 0.3,
         c: colors[Math.floor(Math.random() * colors.length)],
       });
     }
@@ -78,7 +85,9 @@ export function confetti(ms = 2500, count = 140) {
     for (const p of parts) {
       p.x += p.vx; p.y += p.vy; p.vy += 0.06; p.r += p.vr;
       c.save(); c.translate(p.x, p.y); c.rotate(p.r);
-      c.fillStyle = p.c; c.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+      c.fillStyle = p.c;
+      if (p.round) { c.beginPath(); c.ellipse(0, 0, p.w / 2, p.h / 3, 0, 0, 6.2832); c.fill(); }
+      else c.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
       c.restore();
     }
     for (let i = parts.length - 1; i >= 0; i--) if (parts[i].y > cv.height + 30) parts.splice(i, 1);

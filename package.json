@@ -9,9 +9,10 @@
     "dev": "concurrently \"node server/index.js\" \"vite\"",
     "build": "vite build",
     "start": "node server/index.js",
-    "test": "npm run test:server && npm run test:browser",
+    "test": "npm run test:server && npm run test:browser && npm run test:audio",
     "test:server": "node --test test/game.test.mjs test/deal.test.mjs test/edge.test.mjs",
     "test:browser": "node --test --test-timeout=900000 test/browser.test.mjs",
+    "test:audio": "node --test --test-timeout=300000 test/audio.test.mjs",
     "tunnel": "cloudflared tunnel --url http://localhost:5173",
     "screenshots": "node test/screenshots.mjs"
   },

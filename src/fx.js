@@ -48,12 +48,12 @@ const densityScale = () =>
   Math.max(0.18, Math.min(1, (window.innerWidth * window.innerHeight) / REFERENCE_AREA));
 
 const PALETTES = {
-  party: ["#ff4a2e", "#ffcf33", "#f4ead5", "#1fc6b4", "#34d27b", "#ff8bd0"],
+  party: ["#e4000f", "#e0b43c", "#f4f0e4", "#ff3326", "#c08f4a", "#0a0a0c"],
   // The winner moment is gold, so the confetti agrees with it instead of competing.
-  gold: ["#ffcf33", "#fff6d8", "#e0861a", "#f4ead5", "#ff9d3d", "#ffe9a3"],
+  gold: ["#e0b43c", "#ffe9a8", "#8c6a16", "#f4f0e4", "#e4000f", "#c08f4a"],
 };
 
-export function confetti(ms = 2500, count = 140, palette = "party") {
+export function confetti(ms = 2500, count = 140, palette = "party", sides = false) {
   count = Math.max(10, Math.round(count * densityScale()));
   if (reduce()) count = Math.min(count, 24);
   const cv = document.getElementById("confetti");
@@ -63,10 +63,17 @@ export function confetti(ms = 2500, count = 140, palette = "party") {
     cv.height = window.innerHeight;
   }
   const colors = PALETTES[palette] || PALETTES.party;
+  // With `sides`, pieces fall down the outer thirds only and leave a clear corridor
+  // through the middle. The winner's name lives in that corridor, and a celebration
+  // that hides the thing being celebrated is just weather.
+  const spawnX = () =>
+    Math.random() < 0.5
+      ? Math.random() * cv.width * 0.3
+      : cv.width * 0.7 + Math.random() * cv.width * 0.3;
   const spawn = (n) => {
     for (let i = 0; i < n; i++) {
       parts.push({
-        x: Math.random() * cv.width, y: -20 - Math.random() * 140,
+        x: sides ? spawnX() : Math.random() * cv.width, y: -20 - Math.random() * 140,
         vx: (Math.random() - 0.5) * 4, vy: 2 + Math.random() * 5,
         r: Math.random() * 6.28, vr: (Math.random() - 0.5) * 0.4,
         w: 6 + Math.random() * 8, h: 10 + Math.random() * 10,
